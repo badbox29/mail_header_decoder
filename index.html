@@ -211,11 +211,15 @@ textarea::placeholder{color:var(--text-muted);}
 .text-sm{font-size:12px;}
 .xhdr-chev.open{transform:rotate(180deg);}
 .xhdr-body.open{display:block !important;}
+.phase-header{display:flex;align-items:center;gap:8px;padding:8px 0 6px;margin-top:6px;}
+.phase-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;}
+.phase-line{flex:1;height:1px;background:var(--border);}
+.phase-icon{font-size:13px;}
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="topbar-title"><span>✉</span> Mail Header Decoder</div>
+  <div class="topbar-title"><span>✉</span> Mail Flow Analyzer</div>
   <div class="topbar-actions">
     <button class="btn-ghost" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
   </div>
@@ -1273,73 +1277,154 @@ function decodeHeaders(){
   html+=`</div>`;
 
   // ── 3. MESSAGE JOURNEY TIMELINE ───────────────────────────────────────────
+  // Assign each hop to a logical phase
+  function assignPhase(hop, i, allHops){
+    const sys=hop.sys;
+    const isFirst=i===0;
+    const isLast=i===allHops.length-1;
+    const by=hop.by||'';
+    const fromH=hop.fromHost||'';
+
+    if(isFirst) return 'external-sending';
+
+    // Gateway phase: hop IS at a recognized gateway system
+    if(sys&&sys.type==='gateway') return 'gateway';
+
+    // Cloud platform final delivery
+    if(sys&&sys.type==='cloud'){
+      // EOP is filtering, not yet mailbox
+      if(sys.name.includes('Exchange Online Protection')) return 'cloud-filtering';
+      // On final hop, it's mailbox delivery
+      if(isLast) return 'mailbox-delivery';
+      return 'cloud-filtering';
+    }
+
+    // On-prem Exchange after cloud hops = internal routing
+    const prevHasCloud=allHops.slice(0,i).some(h=>h.sys&&h.sys.type==='cloud');
+    const prevHasGateway=allHops.slice(0,i).some(h=>h.sys&&h.sys.type==='gateway');
+    const isOnPrem=!sys&&!/outlook\.com|office365|prod\.outlook|protection\.outlook|google\.com|pphosted|mimecast/i.test(by);
+    if(prevHasCloud&&isOnPrem) return 'internal-routing';
+
+    // Hops between origin and first gateway/cloud = public routing
+    if(!prevHasGateway&&!prevHasCloud) return 'public-routing';
+
+    // Hops between gateway and cloud = internal handoff
+    if(prevHasGateway&&!prevHasCloud) return 'internal-handoff';
+
+    if(isLast) return 'mailbox-delivery';
+    return 'public-routing';
+  }
+
+  const PHASE_META={
+    'external-sending':  {label:'External Sending',           icon:'📤', desc:'Origin — message submitted by sender'},
+    'public-routing':    {label:'Public Routing',             icon:'🌐', desc:'Message traversing public internet infrastructure'},
+    'gateway':           {label:'Third-Party Mail Gateway',   icon:'🛡', desc:'Message processed by security gateway'},
+    'internal-handoff':  {label:'Internal Hand-off',          icon:'🔀', desc:'Gateway forwarding to destination mail platform'},
+    'cloud-filtering':   {label:'Cloud Mail Filtering',       icon:'☁', desc:'Cloud mail platform — anti-spam and policy checks'},
+    'mailbox-delivery':  {label:'Mailbox Delivery',           icon:'📬', desc:'Final delivery to recipient mailbox'},
+    'internal-routing':  {label:'Internal Routing',           icon:'🏢', desc:'Internal mail routing to on-premises mailbox'},
+  };
+
+  // Group hops into ordered phases, preserving hop order within each phase
+  const phaseOrder=['external-sending','public-routing','gateway','internal-handoff','cloud-filtering','internal-routing','mailbox-delivery'];
+  const hopPhases=hopsWithPct.map((hop,i)=>({...hop,phase:assignPhase(hop,i,hopsWithPct)}));
+  // Build ordered list of [phaseName, hops[]] without duplicating phase blocks
+  const phaseGroups=[];
+  let currentPhase=null;
+  for(const hop of hopPhases){
+    if(hop.phase!==currentPhase){
+      phaseGroups.push({phase:hop.phase,hops:[]});
+      currentPhase=hop.phase;
+    }
+    phaseGroups[phaseGroups.length-1].hops.push(hop);
+  }
+
   html+=`<div class="card">
-  <div class="card-hd"><div class="card-icon ci-blue">🗺</div><div><div class="card-title">Message Journey — ${hops.length} hop${hops.length!==1?'s':''}</div><div class="card-desc">Every system the message passed through, in order</div></div></div>
+  <div class="card-hd"><div class="card-icon ci-blue">🗺</div><div><div class="card-title">Message Journey — ${hops.length} hop${hops.length!==1?'s':''}</div><div class="card-desc">Every system the message passed through, grouped by phase</div></div></div>
   ${totalDelay!==null?`<div class="info-box" style="margin-bottom:14px;"><span>⏱</span><span>Total delivery time: <b>${delayLabel(totalDelay)}</b></span></div>`:''}
   <div class="timeline-controls">
     <button class="btn-ghost" onclick="expandAll()">Expand All</button>
     <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
-    <span>${hops.length} hop${hops.length!==1?'s':''} detected</span>
+    <span>${hops.length} hop${hops.length!==1?'s':''} across ${phaseGroups.length} phase${phaseGroups.length!==1?'s':''}</span>
   </div>
   <div class="hop-wrap" id="hopWrap">`;
 
-  hopsWithPct.forEach((hop,i)=>{
-    const isFirst=i===0,isLast=i===hopsWithPct.length-1;
-    const numCls=isFirst?'n-first':isLast?'n-last':(hop.delay&&hop.delay>600000)?'n-crit':'n-mid';
-    const cardCls=isFirst?'hop-first':isLast?'hop-last':(hop.delay&&hop.delay>600000)?'hop-critical':(hop.delay&&hop.delay>60000)?'hop-warn':'';
-    const dc=hop.delay!==null?delayClass(hop.delay):'none';
-    const sys=hop.sys;
-    const hasTLS=hop.tls||/TLS|ESMTPS|STARTTLS/i.test(hop.with||'');
-    const noTLS=!hasTLS&&hop.with&&/SMTP/i.test(hop.with);
-    const pctBadge=hop.pct!==null&&hop.pct>=5?`<span style="font-size:10px;color:var(--text-muted);font-weight:600;">${hop.pct}%</span>`:'';
-
-    if(i>0){
-      html+=`<div class="hop-connector"><div class="hop-connector-icon">↓</div></div>`;
+  let globalHopIdx=0;
+  phaseGroups.forEach((group,gi)=>{
+    const meta=PHASE_META[group.phase]||{label:group.phase,icon:'📧',desc:''};
+    // Phase separator — between phases show a more prominent divider
+    if(gi>0){
+      html+=`<div style="display:flex;align-items:center;gap:0;margin:4px 0;">
+        <div style="width:1px;background:var(--border);height:16px;margin:0 auto;display:block;"></div>
+      </div>`;
     }
-
-    html+=`<div class="hop-card ${cardCls}" id="hop-${i}">
-      <div class="hop-summary" onclick="toggleHop(${i})">
-        <div class="hop-num-badge ${numCls}">${isFirst?'⊙':isLast?'✓':i+1}</div>
-        <div class="hop-summary-body">
-          <div class="hop-summary-title">${esc(hop.desc)}</div>
-          <div class="hop-summary-meta">
-            ${hop.date&&!isNaN(hop.date)?`<span>🕐 ${hop.date.toUTCString()}</span>`:''}
-            ${hop.from?`<span>From: ${esc(hop.from.length>40?hop.from.substring(0,40)+'…':hop.from)}</span>`:''}
-            ${hop.by?`<span>To: ${esc(hop.by.length>40?hop.by.substring(0,40)+'…':hop.by)}</span>`:''}
-          </div>
-        </div>
-        <div class="hop-right">
-          ${sys?`<span class="sys-badge">🏷 ${esc(sys.name)}</span>`:''}
-          ${hasTLS?`<span class="tls-badge">🔒 TLS</span>`:noTLS?`<span class="notls-badge">⚠ No TLS</span>`:''}
-          ${hop.delay!==null?`<span class="delay-pill dp-${dc}">+${delayLabel(hop.delay)}</span>`:`<span class="delay-pill dp-none">origin</span>`}
-          ${pctBadge}
-          <span class="chevron" id="chev-${i}">▼</span>
-        </div>
-      </div>
-      <div class="hop-detail" id="hd-${i}">
-        <div class="hop-detail-grid">
-          ${hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source Hostname</div><div class="hd-val">${esc(hop.fromHost)}</div></div>`:''}
-          ${hop.from&&hop.from!==hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source (reported)</div><div class="hd-val">${esc(hop.from)}</div></div>`:''}
-          ${hop.by?`<div class="hd-item"><div class="hd-lbl">Destination Hostname</div><div class="hd-val">${esc(hop.by)}</div></div>`:''}
-          ${hop.ip?`<div class="hd-item"><div class="hd-lbl">Source IP</div><div class="hd-val">${esc(hop.ip)}</div></div>`:''}
-          ${hop.with?`<div class="hd-item"><div class="hd-lbl">Protocol</div><div class="hd-val">${esc(hop.with)}</div></div>`:''}
-          ${hop.tls?`<div class="hd-item"><div class="hd-lbl">TLS Version</div><div class="hd-val good">${esc(hop.tls)}</div></div>`:''}
-          ${hop.queueId?`<div class="hd-item"><div class="hd-lbl">Queue / Message ID</div><div class="hd-val">${esc(hop.queueId)}</div></div>`:''}
-          ${hop.for?`<div class="hd-item"><div class="hd-lbl">Envelope Recipient</div><div class="hd-val">${esc(hop.for)}</div></div>`:''}
-          ${hop.date&&!isNaN(hop.date)?`<div class="hd-item"><div class="hd-lbl">Timestamp (UTC)</div><div class="hd-val">${esc(hop.date.toUTCString())}</div></div>`:''}
-          ${sys?`<div class="hd-item"><div class="hd-lbl">System Identified</div><div class="hd-val">${esc(sys.name)}</div></div>`:''}
-        </div>
-        ${hop.delay!==null?`
-          <div class="delay-bar-wrap">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Delay at this hop: <b>${delayLabel(hop.delay)}</b></div>
-            <div class="delay-bar-bg"><div class="delay-bar db-${dc}" style="width:${maxDelay>0?Math.min(100,Math.round(hop.delay/maxDelay*100)):0}%"></div></div>
-          </div>
-          <div class="hop-notes ${dc==='crit'?'crit':dc==='warn'?'warn':''}" style="margin-top:8px;">${esc(delayExplain(hop.delay))}</div>
-        `:''}
-        <div onclick="toggleRaw(${i})" class="hop-raw-toggle">▶ Show raw Received header</div>
-        <div class="hop-raw" id="hr-${i}">${esc(hop.raw)}</div>
-      </div>
+    // Phase header
+    html+=`<div class="phase-header">
+      <span class="phase-icon">${meta.icon}</span>
+      <span class="phase-label">${esc(meta.label)}</span>
+      <div class="phase-line"></div>
+      <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${group.hops.length} hop${group.hops.length!==1?'s':''}</span>
     </div>`;
+
+    group.hops.forEach((hop,hi)=>{
+      const i=globalHopIdx++;
+      const isFirst=i===0,isLast=i===hopsWithPct.length-1;
+      const numCls=isFirst?'n-first':isLast?'n-last':(hop.delay&&hop.delay>600000)?'n-crit':'n-mid';
+      const cardCls=isFirst?'hop-first':isLast?'hop-last':(hop.delay&&hop.delay>600000)?'hop-critical':(hop.delay&&hop.delay>60000)?'hop-warn':'';
+      const dc=hop.delay!==null?delayClass(hop.delay):'none';
+      const sys=hop.sys;
+      const hasTLS=hop.tls||/TLS|ESMTPS|STARTTLS/i.test(hop.with||'');
+      const noTLS=!hasTLS&&hop.with&&/SMTP/i.test(hop.with);
+      const pctBadge=hop.pct!==null&&hop.pct>=5?`<span style="font-size:10px;color:var(--text-muted);font-weight:600;">${hop.pct}%</span>`:'';
+
+      if(hi>0){
+        html+=`<div class="hop-connector"><div class="hop-connector-icon">↓</div></div>`;
+      }
+
+      html+=`<div class="hop-card ${cardCls}" id="hop-${i}">
+        <div class="hop-summary" onclick="toggleHop(${i})">
+          <div class="hop-num-badge ${numCls}">${isFirst?'⊙':isLast?'✓':i+1}</div>
+          <div class="hop-summary-body">
+            <div class="hop-summary-title">${esc(hop.desc)}</div>
+            <div class="hop-summary-meta">
+              ${hop.date&&!isNaN(hop.date)?`<span>🕐 ${hop.date.toUTCString()}</span>`:''}
+              ${hop.from?`<span>From: ${esc(hop.from.length>40?hop.from.substring(0,40)+'…':hop.from)}</span>`:''}
+              ${hop.by?`<span>To: ${esc(hop.by.length>40?hop.by.substring(0,40)+'…':hop.by)}</span>`:''}
+            </div>
+          </div>
+          <div class="hop-right">
+            ${sys?`<span class="sys-badge">🏷 ${esc(sys.name)}</span>`:''}
+            ${hasTLS?`<span class="tls-badge">🔒 TLS</span>`:noTLS?`<span class="notls-badge">⚠ No TLS</span>`:''}
+            ${hop.delay!==null?`<span class="delay-pill dp-${dc}">+${delayLabel(hop.delay)}</span>`:`<span class="delay-pill dp-none">origin</span>`}
+            ${pctBadge}
+            <span class="chevron" id="chev-${i}">▼</span>
+          </div>
+        </div>
+        <div class="hop-detail" id="hd-${i}">
+          <div class="hop-detail-grid">
+            ${hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source Hostname</div><div class="hd-val">${esc(hop.fromHost)}</div></div>`:''}
+            ${hop.from&&hop.from!==hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source (reported)</div><div class="hd-val">${esc(hop.from)}</div></div>`:''}
+            ${hop.by?`<div class="hd-item"><div class="hd-lbl">Destination Hostname</div><div class="hd-val">${esc(hop.by)}</div></div>`:''}
+            ${hop.ip?`<div class="hd-item"><div class="hd-lbl">Source IP</div><div class="hd-val">${esc(hop.ip)}</div></div>`:''}
+            ${hop.with?`<div class="hd-item"><div class="hd-lbl">Protocol</div><div class="hd-val">${esc(hop.with)}</div></div>`:''}
+            ${hop.tls?`<div class="hd-item"><div class="hd-lbl">TLS Version</div><div class="hd-val good">${esc(hop.tls)}</div></div>`:''}
+            ${hop.queueId?`<div class="hd-item"><div class="hd-lbl">Queue / Message ID</div><div class="hd-val">${esc(hop.queueId)}</div></div>`:''}
+            ${hop.for?`<div class="hd-item"><div class="hd-lbl">Envelope Recipient</div><div class="hd-val">${esc(hop.for)}</div></div>`:''}
+            ${hop.date&&!isNaN(hop.date)?`<div class="hd-item"><div class="hd-lbl">Timestamp (UTC)</div><div class="hd-val">${esc(hop.date.toUTCString())}</div></div>`:''}
+            ${sys?`<div class="hd-item"><div class="hd-lbl">System Identified</div><div class="hd-val">${esc(sys.name)}</div></div>`:''}
+          </div>
+          ${hop.delay!==null?`
+            <div class="delay-bar-wrap">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Delay at this hop: <b>${delayLabel(hop.delay)}</b>${hop.pct!==null&&hop.pct>=1?' ('+hop.pct+'% of total transit)':''}</div>
+              <div class="delay-bar-bg"><div class="delay-bar db-${dc}" style="width:${maxDelay>0?Math.min(100,Math.round(hop.delay/maxDelay*100)):0}%"></div></div>
+            </div>
+            <div class="hop-notes ${dc==='crit'?'crit':dc==='warn'?'warn':''}" style="margin-top:8px;">${esc(delayExplain(hop.delay))}</div>
+          `:''}
+          <div onclick="toggleRaw(${i})" class="hop-raw-toggle">▶ Show raw Received header</div>
+          <div class="hop-raw" id="hr-${i}">${esc(hop.raw)}</div>
+        </div>
+      </div>`;
+    });
   });
 
   html+=`</div></div>`;
