@@ -740,6 +740,221 @@ function detectMailProvider(hops, hdrs){
   return{mailProvider,isHybrid};
 }
 
+// ─── DELIVERY CLASSIFICATION ─────────────────────────────────────────────────
+function classifyDelivery(hdrs,hops){
+  const contentType=getFirst(hdrs,'content-type')||'';
+  const isNDR=/delivery-status|report-type=delivery/i.test(contentType);
+  const action=(getFirst(hdrs,'action')||'').toLowerCase();
+  const status=getFirst(hdrs,'status')||'';
+  const finalRecipient=getFirst(hdrs,'final-recipient');
+  const diagnosticCode=getFirst(hdrs,'diagnostic-code')||'';
+  const hasFailedRecipients=!!getFirst(hdrs,'x-failed-recipients');
+  const allText=hdrs.map(h=>h.value).join(' ');
+  const smtp5xx=/\b5\d\d\b/.test(allText);
+  const smtp4xx=/\b4\d\d\b/.test(allText);
+  if(isNDR||action==='failed'||hasFailedRecipients||(status&&/^5/.test(status.trim()))){
+    return{mode:'bounced',ndrStatus:status||null,ndrAction:action||'failed',ndrDiagnostic:diagnosticCode||null,finalRecipient:finalRecipient||null};
+  }
+  if(smtp5xx&&hops.length<3)return{mode:'rejected',ndrStatus:null,ndrAction:null,ndrDiagnostic:null,finalRecipient:null};
+  if(smtp4xx&&hops.length<2)return{mode:'deferred',ndrStatus:null,ndrAction:null,ndrDiagnostic:null,finalRecipient:null};
+  if(hops.length===1)return{mode:'incomplete',ndrStatus:null,ndrAction:null,ndrDiagnostic:null,finalRecipient:null};
+  return{mode:'completed',ndrStatus:null,ndrAction:null,ndrDiagnostic:null,finalRecipient:null};
+}
+
+// ─── EVIDENCE TAG ────────────────────────────────────────────────────────────
+function evidenceTag(type){
+  const map={
+    direct:    {cls:'b-pass',  label:'Direct Evidence',     tip:'Confirmed directly from header data'},
+    correlated:{cls:'b-blue',  label:'Correlated Evidence',  tip:'Inferred by cross-referencing multiple headers'},
+    heuristic: {cls:'b-none',  label:'Heuristic Inference',  tip:'Best-guess based on known patterns — not confirmed'},
+  };
+  const d=map[type]||map.heuristic;
+  return`<span class="badge ${d.cls}" style="font-size:10px;letter-spacing:.2px;" title="${esc(d.tip)}">${d.label}</span>`;
+}
+
+// ─── HYBRID ROUTING CHECK ────────────────────────────────────────────────────
+function isHybridRouting(hops){
+  const hasEOP=hops.some(h=>h.sys&&h.sys.name.includes('Exchange Online Protection'));
+  const hasOnPrem=hops.some(h=>{
+    if(!h.by)return false;
+    const isCloud=/outlook\.com|office365|prod\.outlook|protection\.outlook/i.test(h.by);
+    return !isCloud&&/exch|mbx|hub|mail\./i.test(h.by);
+  });
+  return hasEOP&&hasOnPrem;
+}
+
+// ─── MAIL FLOW STORY ─────────────────────────────────────────────────────────
+function generateMailFlowStory(hops,auth,effectiveAuth,aOrig,gatewayMode,gwName,deliveryClass,totalDelay,from,to,mailer){
+  const sentences=[];
+  const firstHop=hops[0];
+  const sentTime=firstHop&&firstHop.date&&!isNaN(firstHop.date)?
+    firstHop.date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:true}):null;
+
+  if(mailer&&sentTime)sentences.push('The message was composed in '+esc(mailer)+' and submitted at '+sentTime+'.');
+  else if(sentTime)sentences.push('The message was submitted by the sender at '+sentTime+'.');
+  else sentences.push('The message was submitted by '+esc(from||'the sender')+'.');
+
+  for(let i=0;i<hops.length;i++){
+    const hop=hops[i];
+    const sys=hop.sys;
+    const name=sys?sys.name:(hop.by||'an unknown server');
+    const tls=hop.tls||/TLS|ESMTPS/i.test(hop.with||'');
+    const enc=tls?' over an encrypted (TLS) connection':'';
+    if(i===0){
+      sentences.push('The sending server ('+esc(hop.by||hop.fromHost||'unknown')+') accepted the message for delivery.');
+      continue;
+    }
+    if(i===hops.length-1){
+      if(deliveryClass.mode==='completed')sentences.push('The message was delivered to the recipient mailbox via '+esc(name)+enc+'.');
+      else if(deliveryClass.mode==='bounced'||deliveryClass.mode==='rejected')sentences.push('The message reached '+esc(name)+' but was rejected'+(deliveryClass.ndrStatus?' (status: '+esc(deliveryClass.ndrStatus)+')':'')+'.');
+      else sentences.push('The last recorded hop was '+esc(name)+'. No further header data is available — the message may have been queued, rejected, or delivered silently at this point.');
+      continue;
+    }
+    if(sys&&sys.type==='gateway'){
+      const gwAuth=(gatewayMode&&aOrig&&aOrig.spf==='pass'&&aOrig.dkim==='pass')?' '+esc(name)+' verified SPF, DKIM, and DMARC successfully.':'';
+      sentences.push('The message was received and scanned by '+esc(name)+enc+'.'+gwAuth);
+    } else {
+      sentences.push('The message was forwarded to '+esc(name)+enc+'.');
+    }
+  }
+
+  if(effectiveAuth.spf==='pass'&&effectiveAuth.dkim==='pass'&&effectiveAuth.dmarc==='pass'){
+    sentences.push('All authentication checks (SPF, DKIM, DMARC) passed'+(gatewayMode?' at the gateway level':'')+', confirming the message is from a legitimate source.');
+  } else if(gatewayMode&&aOrig&&aOrig.spf==='pass'){
+    sentences.push('Authentication was validated by '+esc(gwName)+'. Failures recorded at the final mail server are expected artifacts of gateway forwarding, not spoofing indicators.');
+  } else {
+    const failed=[effectiveAuth.spf!=='pass'?'SPF':'',effectiveAuth.dkim!=='pass'&&effectiveAuth.dkim!=='present'?'DKIM':'',effectiveAuth.dmarc!=='pass'?'DMARC':''].filter(Boolean);
+    if(failed.length)sentences.push(failed.join(' and ')+' check'+(failed.length>1?'s':'')+' failed — the sender\'s domain authentication configuration should be reviewed.');
+  }
+
+  if(totalDelay!==null){
+    if(totalDelay<10000)sentences.push('Total transit time was '+delayLabel(totalDelay)+' — well within normal range.');
+    else if(totalDelay<120000)sentences.push('Total transit time was '+delayLabel(totalDelay)+'.');
+    else sentences.push('Total transit time was '+delayLabel(totalDelay)+', which is above normal and warrants investigation.');
+  }
+
+  if(deliveryClass.mode==='bounced')sentences.push('These headers represent a failed delivery. The message did not reach the intended recipient.');
+  else if(deliveryClass.mode==='incomplete')sentences.push('These headers appear incomplete. The full delivery path may not be visible from the data provided.');
+
+  return sentences;
+}
+
+// ─── INVESTIGATION POINT ─────────────────────────────────────────────────────
+// urgency: 'clear' | 'info' | 'warn' | 'critical'
+// clear    → green, collapsed, "delivered fine, here's the most impactful hop if curious"
+// info     → blue, collapsed, mild note worth knowing but not alarming
+// warn     → amber, collapsed-but-eye-catching, something is off
+// critical → red, EXPANDED by default, tool suspects a real issue
+function generateInvestigationPoint(hops,auth,effectiveAuth,aOrig,gatewayMode,gwName,mailProvider,deliveryClass,totalDelay,ms,isHybrid){
+  let maxDelayMs=0,maxDelayHop=null,maxDelayIdx=0;
+  hops.forEach((h,i)=>{if(i>0&&h.delay&&h.delay>maxDelayMs){maxDelayMs=h.delay;maxDelayHop=h;maxDelayIdx=i;}});
+  const pct=totalDelay&&totalDelay>0?Math.round(maxDelayMs/totalDelay*100):null;
+
+  let target='',reason='',intro='',checks=[],evidence='heuristic',urgency='clear';
+
+  // ── CRITICAL: failure modes, major delays ──────────────────────────────────
+  if(deliveryClass.mode==='bounced'||deliveryClass.mode==='rejected'){
+    urgency='critical';
+    const lastHop=hops[hops.length-1];
+    target=lastHop&&lastHop.sys?lastHop.sys.name:(lastHop&&lastHop.by?lastHop.by:'Last Known System');
+    intro='This message did not reach its destination. A delivery failure was detected.';
+    reason='Rejected at this system'+(deliveryClass.ndrStatus?' with status '+esc(deliveryClass.ndrStatus):'')+'. This is the point of failure — no further hops were recorded.';
+    evidence='direct';
+    checks=['Review rejection logs at the rejecting server for the exact SMTP error code','Verify the recipient address exists and the mailbox is active','Check whether the sender IP or domain is listed on any block list (MX Toolbox, Spamhaus)','Confirm the sending domain has valid SPF and DKIM records'];
+  }
+  else if(maxDelayMs>=300000){
+    // 5+ minute hop — clearly problematic regardless of context
+    urgency='critical';
+    const sys=maxDelayHop.sys;
+    target=sys?sys.name:(maxDelayHop.by||'Unknown server');
+    const prevHop=hops[maxDelayIdx-1];
+    const prevName=prevHop&&prevHop.sys?prevHop.sys.name:(prevHop&&prevHop.by?prevHop.by:'the previous hop');
+    intro='A significant delay was detected. The tool suspects a delivery issue at this system.';
+    reason='A delay of '+delayLabel(maxDelayMs)+(pct!==null?' ('+pct+'% of total transit time)':'')+' was recorded between '+esc(prevName)+' and '+esc(target)+'. This is well outside normal processing time.';
+    evidence='direct';
+    checks=getChecksForSystem(sys,target);
+  }
+  else if(!gatewayMode&&(auth.spf==='fail'||auth.dmarc==='fail')){
+    urgency='critical';
+    const failed=[auth.spf==='fail'?'SPF':'',auth.dmarc==='fail'?'DMARC':''].filter(Boolean);
+    target='Sender Authentication Failure';
+    intro='Hard authentication failures were detected with no gateway to explain them. This warrants investigation.';
+    reason=failed.join(' and ')+' hard-failed. No third-party gateway was detected to account for the failure. This could indicate spoofing or a broken sender DNS configuration.';
+    evidence='correlated';
+    checks=['Verify the sending domain SPF record includes all authorized sending IPs','Check DKIM selector is published and valid in DNS','Review DMARC policy — a p=reject or p=quarantine policy means this message may be filtered or blocked','Confirm no third-party relay or ESP is sending without SPF/DKIM coverage'];
+  }
+
+  // ── WARN: notable but not alarming ────────────────────────────────────────
+  else if(maxDelayMs>=60000&&maxDelayMs<300000){
+    // 1–5 minute single hop — worth noting, may or may not be a real problem
+    urgency='warn';
+    const sys=maxDelayHop.sys;
+    target=sys?sys.name:(maxDelayHop.by||'Unknown server');
+    const prevHop=hops[maxDelayIdx-1];
+    const prevName=prevHop&&prevHop.sys?prevHop.sys.name:(prevHop&&prevHop.by?prevHop.by:'the previous hop');
+    intro='Delivery completed, but a notable delay was detected at one hop. This may warrant a closer look.';
+    reason='A delay of '+delayLabel(maxDelayMs)+(pct!==null?' ('+pct+'% of total transit)':'')+' occurred between '+esc(prevName)+' and '+esc(target)+'. This is above normal for a single hop but may reflect legitimate queue processing or greylisting.';
+    evidence='direct';
+    checks=getChecksForSystem(sys,target);
+  }
+  else if(isHybrid){
+    urgency='warn';
+    target='Hybrid Connector';
+    intro='Hybrid Exchange routing was detected. This is a common source of intermittent delivery issues.';
+    reason='The message routed through both Exchange Online and on-premises Exchange. Hybrid mail flow is more complex and has more potential failure points than a cloud-only environment.';
+    evidence='correlated';
+    checks=['Verify Hybrid Configuration Wizard (HCW) has run successfully and recently','Check Send/Receive Connectors on on-prem Exchange for certificate validity','Review Exchange hybrid mail flow in Exchange Admin Center','Confirm hybrid connector certificates are not expired'];
+  }
+  else if(!gatewayMode&&auth.spf==='softfail'){
+    urgency='info';
+    target='Sender SPF Configuration';
+    intro='Delivery completed. One item is worth noting.';
+    reason='SPF soft-failed for this sender. This means the sending server is not listed in the domain SPF record, but the domain configured SPF to allow soft failures (~all). The message was likely delivered, but this could cause issues if the sender tightens their policy.';
+    evidence='correlated';
+    checks=['Confirm whether the sending IP should be authorized by the domain SPF record','Check if a third-party relay or ESP is sending on behalf of this domain','Review whether the domain intends to move from ~all to -all SPF enforcement'];
+  }
+
+  // ── CLEAR: everything is fine ──────────────────────────────────────────────
+  else{
+    urgency='clear';
+    // Still surface the most impactful hop for the "curious" case
+    if(maxDelayHop&&maxDelayMs>0){
+      const sys=maxDelayHop.sys;
+      target=sys?sys.name:(maxDelayHop.by||'Unknown server');
+      const prevHop=hops[maxDelayIdx-1];
+      const prevName=prevHop&&prevHop.sys?prevHop.sys.name:(prevHop&&prevHop.by?prevHop.by:'the previous hop');
+      intro='This message appears to have delivered within a reasonable time. If you want to review delivery performance or dig deeper, here is where the most processing time was spent.';
+      reason=delayLabel(maxDelayMs)+(pct!==null?' ('+pct+'% of transit)':'')+' was spent between '+esc(prevName)+' and '+esc(target)+'. This is within normal range and does not indicate a problem.';
+      checks=getChecksForSystem(sys,target);
+    } else {
+      target='No Significant Delays Detected';
+      intro='This message appears to have delivered within a reasonable time. No delays, authentication issues, or routing anomalies were found.';
+      reason='All hops processed within normal parameters.';
+      checks=[];
+    }
+    evidence='direct';
+  }
+
+  return{target,reason,intro,checks,evidence,urgency,pct,maxDelayMs};
+}
+
+function getChecksForSystem(sys,fallbackName){
+  if(!sys)return['Review SMTP queue logs at this server around the delay timestamp','Check for rate limiting or connection throttling','Verify DNS resolution from this server'];
+  if(sys.name.includes('Proofpoint'))return['Review Proofpoint queue status and SMTP connection health','Check greylisting policy for this sender IP','Review Proofpoint-to-destination connector health','Check connection retry logs for this sender domain'];
+  if(sys.name.includes('Mimecast'))return['Review Mimecast delivery queue logs','Check Mimecast greylisting and sender reputation settings','Verify Mimecast-to-destination connector configuration','Check Mimecast SMTP diagnostics for this message ID'];
+  if(sys.name.includes('Exchange Online Protection')||sys.name.includes('Exchange Online'))return['Run Microsoft 365 Message Trace (admin.microsoft.com)','Check mail flow rules / transport rules for delays','Review inbound connector configuration','Check Microsoft 365 service health dashboard for active incidents'];
+  if(sys.name.includes('Google'))return['Review Google Workspace Admin Console > Reports > Email Log Search','Check inbound routing and compliance rules in Google Admin','Verify SPF/DKIM/DMARC configuration for the sending domain'];
+  if(sys.name.includes('Barracuda'))return['Review Barracuda message log and delivery queue','Check sender IP reputation in Barracuda settings','Review Barracuda quarantine for this message'];
+  if(sys.name.includes('Cisco')||sys.name.includes('IronPort'))return['Review Cisco ESA message tracking logs','Check sender reputation in Cisco SenderBase','Review ESA inbound policy and content filters'];
+  return['Review SMTP queue logs at this server around the delay timestamp','Check for rate limiting or IP reputation issues','Verify DNS resolution and connectivity from this server','Check for greylisting or connection throttling'];
+}
+
+function calcHopResponsibility(hops,totalDelay){
+  return hops.map((h,i)=>{
+    if(i===0||h.delay===null||!totalDelay)return{...h,pct:null};
+    return{...h,pct:totalDelay>0?Math.round(h.delay/totalDelay*100):0};
+  });
+}
 
 function decodeHeaders(){
   const raw=document.getElementById('headerInput').value.trim();
@@ -801,6 +1016,13 @@ function decodeHeaders(){
     totalDelay=hops[hops.length-1].date-hops[0].date;
   }
   const maxDelay=hops.reduce((mx,h)=>h.delay&&h.delay>mx?h.delay:mx,0);
+
+  // New analysis engines
+  const deliveryClass=classifyDelivery(hdrs,hops);
+  const story=generateMailFlowStory(hops,auth,effectiveAuth,authOrig,gatewayMode,gwName,deliveryClass,totalDelay,from,to,mailer);
+  const invPoint=generateInvestigationPoint(hops,auth,effectiveAuth,authOrig,gatewayMode,gwName,mailProvider,deliveryClass,totalDelay,ms,isHybrid);
+  const hopsWithPct=calcHopResponsibility(hops,totalDelay);
+
   const finding=generateFinding(hops,auth,authOrig,ms,totalDelay);
 
   // known extra headers to skip in "additional" section
@@ -866,6 +1088,54 @@ function decodeHeaders(){
       <div class="conf-dots">${confDots}</div>
       <div class="conf-label">Confidence: <b>${finding.conf}</b></div>
     </div>
+  </div>
+</div>`;
+
+  // ── 1b. MAIL FLOW STORY ───────────────────────────────────────────────────
+  const deliveryModeBadgeCls={completed:'b-pass',bounced:'b-fail',rejected:'b-fail',deferred:'b-soft',incomplete:'b-soft'};
+  const deliveryModeLabel={completed:'Delivered',bounced:'Bounced / NDR',rejected:'Rejected',deferred:'Deferred',incomplete:'Incomplete'};
+  html+=`<div class="card">
+  <div class="card-hd">
+    <div class="card-icon ci-cyan">📖</div>
+    <div style="flex:1;"><div class="card-title">Mail Flow Story</div><div class="card-desc">What happened, in plain English</div></div>
+    <span class="badge ${deliveryModeBadgeCls[deliveryClass.mode]||'b-none'}" style="font-size:12px;">${deliveryModeLabel[deliveryClass.mode]||deliveryClass.mode}</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    ${story.map((s,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:20px;height:20px;border-radius:50%;background:var(--blue-dim);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">'+(i+1)+'</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">'+s+'</div></div>').join('')}
+  </div>
+</div>`;
+
+  // ── 1c. RECOMMENDED INVESTIGATION POINT ──────────────────────────────────
+  const urgencyMap={
+    clear:   {border:'rgba(34,197,94,.25)',  headerBg:'var(--green-dim)',   icon:'✅', iconCls:'ci-green',  titleColor:'var(--green)',  chevColor:'var(--green)',  startOpen:false},
+    info:    {border:'rgba(59,130,246,.3)',  headerBg:'var(--blue-dim)',    icon:'ℹ️', iconCls:'ci-blue',   titleColor:'var(--blue)',   chevColor:'var(--blue)',   startOpen:true},
+    warn:    {border:'rgba(245,158,11,.4)',  headerBg:'var(--orange-dim)',  icon:'⚠️', iconCls:'ci-orange', titleColor:'var(--orange)', chevColor:'var(--orange)', startOpen:true},
+    critical:{border:'rgba(239,68,68,.5)',   headerBg:'var(--red-dim)',     icon:'🚨', iconCls:'ci-red',    titleColor:'var(--red)',    chevColor:'var(--red)',    startOpen:true},
+  };
+  const um=urgencyMap[invPoint.urgency]||urgencyMap.clear;
+  const ipBodyId='ip-body-'+Date.now();
+  const ipChevId='ip-chev-'+Date.now();
+  html+=`<div class="card" style="border-color:${um.border};padding:0;overflow:hidden;">
+  <div onclick="document.getElementById('${ipBodyId}').classList.toggle('open');document.getElementById('${ipChevId}').classList.toggle('open')"
+       style="display:flex;align-items:center;gap:10px;padding:16px 20px;cursor:pointer;background:${um.headerBg};border-radius:12px 12px 0 0;">
+    <div class="card-icon ${um.iconCls}" style="flex-shrink:0;">${um.icon}</div>
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:600;">Recommended Investigation Point</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:1px;">${esc(invPoint.intro)}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      ${evidenceTag(invPoint.evidence)}
+      <span id="${ipChevId}" class="xhdr-chev${um.startOpen?' open':''}" style="font-size:14px;color:${um.chevColor};">▼</span>
+    </div>
+  </div>
+  <div id="${ipBodyId}" class="xhdr-body${um.startOpen?' open':''}" style="padding:16px 20px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="font-size:18px;font-weight:700;color:${um.titleColor};">${esc(invPoint.target)}</div>
+      ${invPoint.pct!==null&&invPoint.urgency!=='clear'?'<span class="delay-pill dp-'+delayClass(invPoint.maxDelayMs)+'">'+delayLabel(invPoint.maxDelayMs)+' / '+invPoint.pct+'% of transit</span>':''}
+      ${invPoint.pct!==null&&invPoint.urgency==='clear'?'<span style="font-size:12px;color:var(--text-muted);">'+delayLabel(invPoint.maxDelayMs)+' ('+invPoint.pct+'% of transit)</span>':''}
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:${invPoint.checks.length?'14px':'0'};">${esc(invPoint.reason)}</div>
+    ${invPoint.checks.length?'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">'+(invPoint.urgency==='clear'?'If you want to dig deeper':'Suggested Checks')+'</div><div style="display:flex;flex-direction:column;gap:6px;">'+invPoint.checks.map(c=>'<div style="display:flex;gap:8px;font-size:13px;color:var(--text-secondary);"><span style="color:var(--blue);flex-shrink:0;font-weight:700;">•</span><span>'+esc(c)+'</span></div>').join('')+'</div>':''}
   </div>
 </div>`;
 
@@ -1013,14 +1283,15 @@ function decodeHeaders(){
   </div>
   <div class="hop-wrap" id="hopWrap">`;
 
-  hops.forEach((hop,i)=>{
-    const isFirst=i===0,isLast=i===hops.length-1;
+  hopsWithPct.forEach((hop,i)=>{
+    const isFirst=i===0,isLast=i===hopsWithPct.length-1;
     const numCls=isFirst?'n-first':isLast?'n-last':(hop.delay&&hop.delay>600000)?'n-crit':'n-mid';
     const cardCls=isFirst?'hop-first':isLast?'hop-last':(hop.delay&&hop.delay>600000)?'hop-critical':(hop.delay&&hop.delay>60000)?'hop-warn':'';
     const dc=hop.delay!==null?delayClass(hop.delay):'none';
     const sys=hop.sys;
     const hasTLS=hop.tls||/TLS|ESMTPS|STARTTLS/i.test(hop.with||'');
     const noTLS=!hasTLS&&hop.with&&/SMTP/i.test(hop.with);
+    const pctBadge=hop.pct!==null&&hop.pct>=5?`<span style="font-size:10px;color:var(--text-muted);font-weight:600;">${hop.pct}%</span>`:'';
 
     if(i>0){
       html+=`<div class="hop-connector"><div class="hop-connector-icon">↓</div></div>`;
@@ -1041,6 +1312,7 @@ function decodeHeaders(){
           ${sys?`<span class="sys-badge">🏷 ${esc(sys.name)}</span>`:''}
           ${hasTLS?`<span class="tls-badge">🔒 TLS</span>`:noTLS?`<span class="notls-badge">⚠ No TLS</span>`:''}
           ${hop.delay!==null?`<span class="delay-pill dp-${dc}">+${delayLabel(hop.delay)}</span>`:`<span class="delay-pill dp-none">origin</span>`}
+          ${pctBadge}
           <span class="chevron" id="chev-${i}">▼</span>
         </div>
       </div>
