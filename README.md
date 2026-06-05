@@ -4,6 +4,11 @@ A single-file forensic email analysis tool. Paste raw email headers and get a co
 
 Designed for mail administrators and technically capable users who need fast answers without decoding raw headers by hand.
 
+#### Demo:
+https://badbox29.github.io/mail-flow-analyzer/
+
+---
+
 #### Screenshot
 ![Screenshot](screenshot.png)
 
