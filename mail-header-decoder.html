@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mail Header Decoder</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-page:#1a1a1f;--bg-card:#22222a;--bg-card2:#2a2a35;--bg-input:#16161c;
+  --border:#3a3a4a;--border-light:#4a4a5a;
+  --text-primary:#e8e8f0;--text-secondary:#9090a8;--text-muted:#606075;
+  --blue:#3b82f6;--blue-hover:#2563eb;--blue-dim:rgba(59,130,246,0.15);
+  --green:#22c55e;--green-dim:rgba(34,197,94,0.12);
+  --orange:#f59e0b;--orange-dim:rgba(245,158,11,0.12);
+  --red:#ef4444;--red-dim:rgba(239,68,68,0.12);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.12);
+  --cyan:#22d3ee;--cyan-dim:rgba(34,211,238,0.1);
+  --yellow:#fde047;--yellow-dim:rgba(253,224,71,0.1);
+}
+.light{
+  --bg-page:#f0f0f5;--bg-card:#ffffff;--bg-card2:#f5f5fa;--bg-input:#eaeaf2;
+  --border:#d0d0e0;--border-light:#b0b0cc;
+  --text-primary:#1a1a2e;--text-secondary:#5a5a78;--text-muted:#9090a8;
+  --blue-dim:rgba(59,130,246,0.1);--green-dim:rgba(34,197,94,0.1);
+  --orange-dim:rgba(245,158,11,0.1);--red-dim:rgba(239,68,68,0.1);
+  --purple-dim:rgba(167,139,250,0.1);--cyan-dim:rgba(34,211,238,0.08);--yellow-dim:rgba(253,224,71,0.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg-page);color:var(--text-primary);min-height:100vh;transition:background .2s,color .2s;}
+a{color:var(--blue);}
+/* LAYOUT */
+.topbar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar-title{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.topbar-title span{font-size:20px;}
+.topbar-actions{display:flex;gap:8px;align-items:center;}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 60px;}
+/* TABS */
+.mode-tabs{display:flex;gap:4px;margin-bottom:20px;}
+.mode-tab{padding:8px 18px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .15s;}
+.mode-tab.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.mode-tab:hover:not(.active){color:var(--text-primary);border-color:var(--border-light);}
+/* CARDS */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;}
+.card-hd{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.card-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.ci-blue{background:var(--blue-dim);color:var(--blue);}
+.ci-green{background:var(--green-dim);color:var(--green);}
+.ci-orange{background:var(--orange-dim);color:var(--orange);}
+.ci-red{background:var(--red-dim);color:var(--red);}
+.ci-purple{background:var(--purple-dim);color:var(--purple);}
+.ci-cyan{background:var(--cyan-dim);color:var(--cyan);}
+.card-title{font-size:15px;font-weight:600;}
+.card-desc{font-size:12px;color:var(--text-secondary);margin-top:1px;}
+/* BUTTONS */
+.btn-primary{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .15s;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary:hover{background:var(--blue-hover);}
+.btn-secondary{background:var(--bg-card2);color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:11px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-secondary:hover{color:var(--text-primary);border-color:var(--border-light);}
+.btn-ghost{background:transparent;color:var(--text-secondary);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-ghost:hover{color:var(--text-primary);border-color:var(--border-light);}
+.btn-green{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,.25);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-green:hover{background:rgba(34,197,94,.2);}
+/* INPUT */
+textarea{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:14px;resize:vertical;min-height:180px;outline:none;transition:border-color .15s;}
+textarea:focus{border-color:var(--blue);}
+textarea::placeholder{color:var(--text-muted);}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:.3px;}
+.b-pass{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.b-fail{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.b-soft{background:var(--orange-dim);color:var(--orange);border:1px solid rgba(245,158,11,.25);}
+.b-none{background:var(--bg-card2);color:var(--text-muted);border:1px solid var(--border);}
+.b-blue{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(59,130,246,.25);}
+.b-purple{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+/* SUMMARY GRID */
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;}
+.sum-item{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.sum-lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;}
+.sum-val{font-size:13px;font-weight:500;word-break:break-all;line-height:1.4;}
+.sum-val.mono{font-family:'JetBrains Mono',monospace;font-size:11px;}
+/* EXEC SUMMARY */
+.finding-box{background:var(--blue-dim);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:14px 18px;margin-top:14px;}
+.finding-label{font-size:11px;color:var(--blue);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;}
+.finding-text{font-size:14px;line-height:1.6;color:var(--text-primary);}
+.confidence-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.conf-dots{display:flex;gap:3px;}
+.conf-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
+.conf-dot.filled{background:var(--blue);}
+.conf-label{font-size:12px;color:var(--text-secondary);}
+/* AUTH */
+.auth-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+.auth-item{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.auth-name{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;}
+.auth-explain{font-size:11px;color:var(--text-secondary);line-height:1.5;margin-top:6px;}
+.auth-item.pass{border-color:rgba(34,197,94,.3);}
+.auth-item.fail{border-color:rgba(239,68,68,.3);}
+.auth-item.soft{border-color:rgba(245,158,11,.3);}
+/* TIMELINE */
+.timeline-controls{display:flex;gap:8px;margin-bottom:14px;align-items:center;}
+.timeline-controls span{font-size:12px;color:var(--text-muted);margin-left:auto;}
+.hop-wrap{position:relative;}
+.hop-connector{display:flex;justify-content:center;align-items:center;height:22px;color:var(--text-muted);font-size:18px;position:relative;}
+.hop-connector::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);transform:translateX(-50%);}
+.hop-connector-icon{background:var(--bg-page);padding:0 4px;position:relative;z-index:1;font-size:14px;}
+.hop-card{background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;margin-bottom:0;overflow:hidden;transition:border-color .15s;}
+.hop-card:hover{border-color:var(--border-light);}
+.hop-card.hop-critical{border-color:rgba(239,68,68,.4);}
+.hop-card.hop-warn{border-color:rgba(245,158,11,.3);}
+.hop-card.hop-first{border-color:rgba(167,139,250,.3);}
+.hop-card.hop-last{border-color:rgba(34,197,94,.3);}
+.hop-summary{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;}
+.hop-num-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.hop-num-badge.n-first{background:var(--purple-dim);color:var(--purple);}
+.hop-num-badge.n-last{background:var(--green-dim);color:var(--green);}
+.hop-num-badge.n-mid{background:var(--blue-dim);color:var(--blue);}
+.hop-num-badge.n-crit{background:var(--red-dim);color:var(--red);}
+.hop-summary-body{flex:1;min-width:0;}
+.hop-summary-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hop-summary-meta{font-size:11px;color:var(--text-muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;}
+.hop-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.delay-pill{padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;}
+.dp-fast{background:var(--green-dim);color:var(--green);}
+.dp-minor{background:var(--yellow-dim);color:var(--yellow);}
+.dp-warn{background:var(--orange-dim);color:var(--orange);}
+.dp-crit{background:var(--red-dim);color:var(--red);}
+.dp-none{background:var(--bg-card);color:var(--text-muted);}
+.chevron{font-size:14px;color:var(--text-muted);transition:transform .2s;}
+.chevron.open{transform:rotate(180deg);}
+.hop-detail{display:none;border-top:1px solid var(--border);padding:14px 16px;}
+.hop-detail.open{display:block;}
+.hop-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.hd-item{background:var(--bg-input);border-radius:6px;padding:8px 10px;}
+.hd-lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.hd-val{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);word-break:break-all;line-height:1.4;}
+.hd-val.good{color:var(--green);}
+.hd-val.bad{color:var(--red);}
+.hop-raw-toggle{font-size:11px;color:var(--blue);cursor:pointer;margin-top:8px;display:inline-block;}
+.hop-raw{display:none;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;word-break:break-all;}
+.hop-raw.open{display:block;}
+.hop-notes{background:var(--bg-input);border-radius:6px;padding:10px;font-size:12px;color:var(--text-secondary);line-height:1.6;margin-top:8px;}
+.hop-notes.warn{background:var(--orange-dim);color:var(--orange);}
+.hop-notes.crit{background:var(--red-dim);color:var(--red);}
+.sys-badge{display:inline-flex;align-items:center;gap:5px;background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,.2);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;}
+.tls-badge{display:inline-flex;align-items:center;gap:5px;background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;}
+.notls-badge{display:inline-flex;align-items:center;gap:5px;background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;}
+/* DELAY BAR */
+.delay-bar-wrap{margin:10px 0;}
+.delay-bar-bg{background:var(--bg-input);border-radius:4px;height:6px;overflow:hidden;}
+.delay-bar{height:100%;border-radius:4px;transition:width .4s;}
+.db-fast{background:var(--green);}
+.db-minor{background:var(--yellow);}
+.db-warn{background:var(--orange);}
+.db-crit{background:var(--red);}
+/* SECURITY */
+.sec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+.sec-item{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.sec-q{font-size:12px;color:var(--text-secondary);margin-bottom:6px;}
+.sec-a{font-size:13px;font-weight:600;}
+/* DELIVERY */
+.del-timeline{display:flex;flex-direction:column;gap:6px;}
+.del-hop{display:flex;align-items:center;gap:10px;font-size:12px;}
+.del-bar-outer{flex:1;background:var(--bg-input);border-radius:4px;height:8px;overflow:hidden;}
+.del-bar-inner{height:100%;border-radius:4px;}
+/* MICROSOFT */
+.ms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+.ms-item{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;text-align:center;}
+.ms-val{font-size:24px;font-weight:700;margin-bottom:4px;}
+.ms-lbl{font-size:11px;color:var(--text-muted);}
+.ms-explain{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+/* RAW */
+.raw-search{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 14px;outline:none;margin-bottom:10px;}
+.raw-search::placeholder{color:var(--text-muted);}
+.raw-search:focus{border-color:var(--blue);}
+.raw-viewer{background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;}
+.hl-key{color:var(--blue);}
+.hl-val{color:var(--text-secondary);}
+.hl-match{background:rgba(253,224,71,.25);border-radius:2px;}
+/* WARN / INFO BOXES */
+.warn-box{background:var(--orange-dim);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--orange);display:flex;gap:10px;}
+.info-box{background:var(--blue-dim);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--text-secondary);display:flex;gap:10px;}
+.error-box{background:var(--red-dim);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:16px;text-align:center;color:var(--red);}
+/* COMPARISON */
+.cmp-col{flex:1;min-width:0;}
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.cmp-lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.diff-row{display:flex;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);}
+.diff-row:last-child{border-bottom:none;}
+.diff-key{color:var(--text-muted);min-width:120px;}
+.diff-a{flex:1;word-break:break-all;}
+.diff-b{flex:1;word-break:break-all;}
+.diff-changed{color:var(--orange);}
+.diff-same{color:var(--text-secondary);}
+.diff-missing{color:var(--red);font-style:italic;}
+/* SANITIZE */
+.san-options{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+.san-opt{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;}
+.san-opt input{cursor:pointer;width:15px;height:15px;}
+/* TOOLTIP */
+.tooltip-wrap{position:relative;display:inline-block;}
+.tooltip-icon{font-size:11px;color:var(--text-muted);cursor:help;margin-left:4px;border:1px solid var(--border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;}
+.tooltip-popup{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text-secondary);white-space:nowrap;max-width:260px;white-space:normal;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.3);line-height:1.5;}
+.tooltip-wrap:hover .tooltip-popup{display:block;}
+/* MISC */
+.sample-btn{font-size:12px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:underline;padding:4px 0;}
+.section-divider{height:1px;background:var(--border);margin:6px 0 14px;}
+.row{display:flex;gap:10px;align-items:center;}
+.spacer{flex:1;}
+.mono{font-family:'JetBrains Mono',monospace;font-size:11px;}
+.text-muted{color:var(--text-muted);}
+.text-sm{font-size:12px;}
+.xhdr-chev.open{transform:rotate(180deg);}
+.xhdr-body.open{display:block !important;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-title"><span>✉</span> Mail Header Decoder</div>
+  <div class="topbar-actions">
+    <button class="btn-ghost" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="showMode('single',this)">Single Analysis</button>
+    <button class="mode-tab" onclick="showMode('compare',this)">Compare Two Headers</button>
+  </div>
+
+  <!-- SINGLE MODE -->
+  <div id="mode-single">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-icon ci-blue">📋</div>
+        <div><div class="card-title">Paste Email Headers</div><div class="card-desc">Copy full raw headers from your email client and paste below</div></div>
+      </div>
+      <textarea id="headerInput" placeholder="Paste raw email headers here…"></textarea>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+        <button class="sample-btn" onclick="loadSample()">Load sample headers</button>
+        <div style="flex:1"></div>
+        <button class="btn-primary" onclick="decodeHeaders()">🔍 Decode Headers</button>
+        <button class="btn-secondary" onclick="resetAll()">Reset</button>
+      </div>
+    </div>
+    <div id="results"></div>
+  </div>
+
+  <!-- COMPARE MODE -->
+  <div id="mode-compare" style="display:none;">
+    <div class="cmp-grid" style="margin-bottom:14px;">
+      <div class="card" style="margin:0;">
+        <div class="card-hd"><div class="card-icon ci-blue">📋</div><div><div class="card-title">Headers A</div></div></div>
+        <textarea id="cmpA" placeholder="Paste first set of headers…" style="min-height:140px;"></textarea>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="card-hd"><div class="card-icon ci-purple">📋</div><div><div class="card-title">Headers B</div></div></div>
+        <textarea id="cmpB" placeholder="Paste second set of headers…" style="min-height:140px;"></textarea>
+      </div>
+    </div>
+    <div style="text-align:center;margin-bottom:16px;">
+      <button class="btn-primary" onclick="doCompare()">⚖ Compare Headers</button>
+    </div>
+    <div id="cmp-results"></div>
+  </div>
+</div>
+
+<script>
+// ─── THEME ──────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const b=document.body,btn=document.getElementById('themeBtn');
+  b.classList.toggle('light');
+  btn.textContent=b.classList.contains('light')?'🌙 Dark':'☀ Light';
+}
+function showMode(m,el){
+  document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('mode-single').style.display=m==='single'?'':'none';
+  document.getElementById('mode-compare').style.display=m==='compare'?'':'none';
+}
+
+// ─── SAMPLE DATA ─────────────────────────────────────────────────────────────
+function loadSample(){
+document.getElementById('headerInput').value=`Delivered-To: alice@contoso.com
+Received: from BN8PR03MB6654.namprd03.prod.outlook.com (2603:10b6:408:11e::10)
+ by DM6PR03MB5095.namprd03.prod.outlook.com with HTTPS; Mon, 15 Jan 2024 16:32:45 +0000
+Received: from BN8NAM11FT006.eop-nam11.prod.protection.outlook.com
+ (2603:10b6:408:11e:cafe::6a) by BN8PR03MB6654.namprd03.prod.outlook.com
+ with HTTPS; Mon, 15 Jan 2024 16:32:43 +0000
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector9901; d=microsoft.com; cv=none;
+ b=ES/abcdef1234567890
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector9901; h=From:Date:Subject:Message-ID:Content-Type;
+ bh=ABC123==; b=XYZ456==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=gmail.com; dmarc=pass action=none header.from=gmail.com;
+ dkim=pass header.d=gmail.com; arc=none
+Authentication-Results: spf=pass (sender IP is 209.85.128.198)
+ smtp.mailfrom=gmail.com; dkim=pass (signature was verified)
+ header.d=gmail.com;header.s=20230601;header.b=XYzAbC12;
+ dmarc=pass action=none header.from=gmail.com;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of gmail.com designates
+ 209.85.128.198 as permitted sender) receiver=protection.outlook.com;
+ client-ip=209.85.128.198; helo=mail-yw1-f198.google.com
+Received: from mail-yw1-f198.google.com (mail-yw1-f198.google.com [209.85.128.198])
+ by BN8NAM11FT006.eop-nam11.prod.protection.outlook.com (8.12.209.0)
+ with ESMTPS id BN8NAM11FT006-001
+ for <alice@contoso.com>; Mon, 15 Jan 2024 16:32:38 +0000
+Received: by mail-yw1-f198.google.com with SMTP id 3d3e6a1234
+ for <alice@contoso.com>; Mon, 15 Jan 2024 08:32:10 -0800 (PST)
+Received: from [192.168.1.5] (unknown [72.14.200.100])
+ by smtp.gmail.com with ESMTPSA id t12sm1234567ybk.42.2024.01.15.08.32.08
+ (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+ Mon, 15 Jan 2024 08:32:08 -0800 (PST)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20230601;
+ h=from:to:subject:date:message-id:mime-version;
+ bh=ABC123xyzBase64Hash==; b=XYzAbC12defGHI34jkl
+X-Forwarded-To: alice@contoso.com
+X-Original-To: alice@contoso.com
+Return-Path: <bob@gmail.com>
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=1e100.net; s=20230601
+Message-ID: <CABcDeFgHiJkLmN@mail.gmail.com>
+Date: Mon, 15 Jan 2024 08:32:05 -0800
+From: Bob Smith <bob@gmail.com>
+To: Alice Jones <alice@contoso.com>
+Subject: Re: Project Update - Q1 Plans
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="000000000000abc123def"
+X-MS-Exchange-Organization-SCL: 1
+X-MS-Exchange-Organization-PCL: 2
+X-MS-Exchange-Organization-BCL: 0
+X-Forefront-Antispam-Report: CIP:209.85.128.198;CTRY:US;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:mail-yw1-f198.google.com;PTR:mail-yw1-f198.google.com;CAT:NONE;SFS:;DIR:INB;
+X-Microsoft-Antispam: BCL:0;
+X-MS-Exchange-Organization-Network-Message-Id: 1234abcd-5678-efgh-ijkl-901234mnopqr
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+X-Mailer: Apple Mail
+X-Spam-Status: No
+X-Spam-Score: -0.1`;
+}
+
+// ─── PARSER ──────────────────────────────────────────────────────────────────
+function parseHeaders(raw){
+  const lines=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  const hdrs=[];let cur=null;
+  for(const ln of lines){
+    if(!ln.trim())continue;
+    if(/^\s/.test(ln)&&cur){cur.value+=' '+ln.trim();}
+    else{const m=ln.match(/^([^:]+):\s*(.*)/);if(m){cur={name:m[1].trim(),value:m[2].trim()};hdrs.push(cur);}}
+  }
+  return hdrs;
+}
+function getAll(hdrs,name){return hdrs.filter(h=>h.name.toLowerCase()===name.toLowerCase()).map(h=>h.value);}
+function getFirst(hdrs,name){const r=getAll(hdrs,name);return r.length?r[0]:null;}
+
+// ─── SYSTEM CLASSIFIER ───────────────────────────────────────────────────────
+// Each entry: re = hostname pattern, name = friendly name, icon, color,
+// type = 'gateway'|'mta'|'cloud'|'sender', authHeader = vendor-specific pre-gateway auth header name
+const SYS_PATTERNS=[
+  // ── Third-party security gateways ──
+  {re:/pphosted\.com|proofpoint/i,           name:'Proofpoint Gateway',      icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results-original','x-pp-authresults'],
+   indicators:['x-proofpoint-guid','x-proofpoint-spam-details','x-proofpoint-virus-version']},
+  {re:/mimecast/i,                            name:'Mimecast Gateway',        icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],  // Mimecast re-stamps AR but from its own domain
+   indicators:['x-mc-unique','x-mimecast-spam-score','x-mimecast-bulk-signature']},
+  {re:/barracuda|bsf\.barracudanetworks/i,    name:'Barracuda Gateway',       icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],
+   indicators:['x-barracuda-spam-score','x-barracuda-connect','x-barracuda-start-time']},
+  {re:/esa\.cisco|ironport|c\.mail\./i,       name:'Cisco ESA',               icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],
+   indicators:['x-ironport-anti-spam-filtered','x-ironport-av','x-ironport-sendergroup']},
+  {re:/abnormalsecurity/i,                    name:'Abnormal Security',       icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:['x-abnormal-']},
+  {re:/agari/i,                               name:'Agari Gateway',           icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:[]},
+  {re:/forcepoint|websense/i,                 name:'Forcepoint Gateway',      icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:[]},
+  {re:/sophos|reflexion/i,                    name:'Sophos Gateway',          icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:['x-sophos-']},
+  {re:/trendmicro|imhs\.managed/i,            name:'Trend Micro Gateway',     icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:['x-trendmicro-osprey']},
+  {re:/messagelabs|symantec\.cloud/i,         name:'Symantec/MessageLabs',    icon:'🛡',color:'purple', type:'gateway',
+   authHeaders:['authentication-results'],   indicators:['x-ms-tnef-correlator']},
+
+  // ── Final delivery / cloud mail ──
+  {re:/prod\.protection\.outlook\.com|eop-[\w]+\.prod/i, name:'Exchange Online Protection', icon:'☁',color:'blue', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-ms-exchange-organization-scl','x-forefront-antispam-report']},
+  {re:/prod\.outlook\.com|outlook\.office365|namprd|eurprd|apcprd/i, name:'Exchange Online', icon:'☁',color:'blue', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-ms-exchange-transport']},
+  {re:/protection\.outlook|defender\.microsoft/i, name:'Microsoft Defender',  icon:'🛡',color:'blue', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-ms-exchange-atpmessageproperties']},
+  {re:/google\.com|gmail\.com|googlemail|smtp\.google/i, name:'Google Workspace / Gmail', icon:'📧',color:'cyan', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-google-dkim-signature','x-gm-message-state','x-google-smtp-source']},
+  {re:/amazonses|ses\.amazonaws|email\.amazonses/i, name:'Amazon SES',         icon:'☁',color:'orange', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-ses-outgoing','x-ses-message-id']},
+  {re:/sendgrid/i,                            name:'SendGrid',                icon:'📤',color:'blue', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-sg-eid','x-sg-id']},
+  {re:/mailgun/i,                             name:'Mailgun',                 icon:'📤',color:'orange', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:['x-mailgun-tag','x-mailgun-sid']},
+  {re:/smtp\.gmail\.com/i,                    name:'Gmail SMTP',              icon:'📧',color:'cyan', type:'cloud',
+   authHeaders:['authentication-results'],   indicators:[]},
+
+  // ── MTAs ──
+  {re:/postfix/i,   name:'Postfix MTA',  icon:'📬',color:'cyan', type:'mta', authHeaders:[], indicators:[]},
+  {re:/exim/i,      name:'Exim MTA',     icon:'📬',color:'cyan', type:'mta', authHeaders:[], indicators:[]},
+  {re:/sendmail/i,  name:'Sendmail MTA', icon:'📬',color:'cyan', type:'mta', authHeaders:[], indicators:[]},
+];
+
+function classifySystem(host,proto){
+  if(!host)return null;
+  for(const s of SYS_PATTERNS){if(s.re.test(host))return s;}
+  if(/smtp|mail|mx\d/i.test(host))return{name:'Mail Server',icon:'📬',color:'cyan',type:'mta',authHeaders:[],indicators:[]};
+  return null;
+}
+
+// ─── GATEWAY DETECTION ENGINE ────────────────────────────────────────────────
+// Returns { gatewayMode, gatewayHops, finalHop, authOrig, effectiveAuth }
+// Works for any gateway vendor and any final delivery platform.
+function detectGatewayMode(hops, auth, hdrs){
+  // 1. Find all gateway hops (type='gateway') and the final delivery hop
+  const gatewayHops=hops.filter(h=>h.sys&&h.sys.type==='gateway');
+  const finalHop=hops[hops.length-1];
+  const finalSys=finalHop&&finalHop.sys;
+
+  // 2. Collect vendor-specific auth headers
+  // Priority: vendor-specific header > Authentication-Results-Original > AR from gateway's own domain
+  let authOrig={};
+
+  // Proofpoint-specific
+  const authOrigVals=getAll(hdrs,'authentication-results-original');
+  for(const v of authOrigVals) Object.assign(authOrig,parseAuth(v));
+
+  // Mimecast stamps its AR with domain "mx.mimecast.com" — find AR headers NOT from the final MTA
+  // and parse the one most likely from the gateway
+  if(!Object.keys(authOrig).length){
+    const allARVals=getAll(hdrs,'authentication-results');
+    // The final MTA's AR is usually the FIRST one (headers prepended in reverse order)
+    // The gateway's AR is usually deeper in the list
+    if(allARVals.length>1){
+      // Try to find an AR that matches a gateway domain
+      for(let i=1;i<allARVals.length;i++){
+        const parsed=parseAuth(allARVals[i]);
+        if(parsed.spf==='pass'||parsed.dkim==='pass'){
+          Object.assign(authOrig,parsed);
+          break;
+        }
+      }
+    }
+  }
+
+  // Vendor-specific indicator headers — if we see them, we know a gateway processed this
+  const allHdrNames=hdrs.map(h=>h.name.toLowerCase());
+  const vendorIndicators={
+    'Proofpoint Gateway': ['x-proofpoint-guid','x-proofpoint-spam-details'],
+    'Mimecast Gateway':   ['x-mc-unique','x-mimecast-spam-score','x-mimecast-bulk-signature'],
+    'Barracuda Gateway':  ['x-barracuda-spam-score','x-barracuda-connect'],
+    'Cisco ESA':          ['x-ironport-anti-spam-filtered','x-ironport-av'],
+    'Abnormal Security':  ['x-abnormal-status'],
+  };
+  let detectedGatewayName=null;
+  for(const [gname,indicators] of Object.entries(vendorIndicators)){
+    if(indicators.some(ind=>allHdrNames.some(h=>h.startsWith(ind.toLowerCase())))){
+      detectedGatewayName=gname;
+      break;
+    }
+  }
+
+  // 3. Determine if gateway mode applies:
+  //    - A gateway hop exists in the chain OR vendor indicators found
+  //    - The final delivery hop is a cloud MTA (Exchange, Google, etc.)
+  //    - Auth at the boundary shows failures in at least one key area
+  //    - We have pre-gateway auth that shows passes
+  const hasGateway=gatewayHops.length>0||!!detectedGatewayName;
+  const primaryGateway=gatewayHops.length>0?gatewayHops[gatewayHops.length-1]:
+    (detectedGatewayName?{sys:{name:detectedGatewayName,type:'gateway'}}:null);
+  const origPassed=Object.keys(authOrig).length>0&&
+    (authOrig.spf==='pass'||authOrig.dkim==='pass'||authOrig.dmarc==='pass');
+  const boundaryFailed=auth.spf!=='pass'||auth.dkim!=='pass'||auth.dmarc!=='pass';
+  const isFinalCloud=finalSys&&(finalSys.type==='cloud');
+
+  const gatewayMode=hasGateway&&(origPassed||!boundaryFailed)&&(isFinalCloud||hasGateway);
+
+  // 4. Build effectiveAuth — use gateway results for checks where boundary failed
+  //    but keep boundary results where they passed
+  const effectiveAuth=gatewayMode?{...auth,...authOrig,_gateway:primaryGateway&&primaryGateway.sys?primaryGateway.sys.name:detectedGatewayName}:auth;
+
+  return{
+    gatewayMode,
+    gatewayHops,
+    gatewayHop:primaryGateway,
+    detectedGatewayName,
+    authOrig,
+    effectiveAuth,
+    finalSys
+  };
+}
+
+function parseReceived(val){
+  const fromM=val.match(/from\s+(\S+)\s*(?:\(([^)]+)\))?/i);
+  const byM=val.match(/by\s+(\S+)/i);
+  const withM=val.match(/with\s+([\w]+)/i);
+  const dateM=val.match(/;\s*(.+)$/);
+  const forM=val.match(/for\s+<([^>]+)>/i);
+  const ipM=(fromM&&fromM[2])?fromM[2].match(/[\d\.]+/):null;
+  const tlsM=val.match(/TLS[\w_.]+/i);
+  const idM=val.match(/id\s+([\w.\-]+)/i);
+  const viaM=val.match(/via\s+(\S+)/i);
+  let date=null;
+  if(dateM){try{date=new Date(dateM[1].trim());}catch(e){}}
+  return{
+    from:fromM?(fromM[2]||fromM[1]):null,
+    fromHost:fromM?fromM[1]:null,
+    by:byM?byM[1]:null,
+    with:withM?withM[1]:null,
+    date:(date&&!isNaN(date))?date:null,
+    for:forM?forM[1]:null,
+    ip:ipM?ipM[0]:null,
+    tls:tlsM?tlsM[0]:null,
+    queueId:idM?idM[1]:null,
+    via:viaM?viaM[1]:null,
+    raw:val
+  };
+}
+
+function parseAuth(val){
+  const r={};
+  const spfM=val.match(/spf=([\w]+)/i);
+  const dkimM=val.match(/dkim=([\w]+)/i);
+  const dmarcM=val.match(/dmarc=([\w]+)/i);
+  const arcM=val.match(/arc=([\w]+)/i);
+  const compM=val.match(/compauth=([\w]+)/i);
+  const compReasonM=val.match(/reason=(\d+)/i);
+  if(spfM)r.spf=spfM[1].toLowerCase();
+  if(dkimM)r.dkim=dkimM[1].toLowerCase();
+  if(dmarcM)r.dmarc=dmarcM[1].toLowerCase();
+  if(arcM)r.arc=arcM[1].toLowerCase();
+  if(compM)r.compauth=compM[1].toLowerCase();
+  if(compReasonM)r.compReason=compReasonM[1];
+  return r;
+}
+
+function authClass(v){
+  if(!v)return'none';
+  v=v.toLowerCase();
+  if(v==='pass'||v.startsWith('pass'))return'pass';
+  if(v==='fail'||v==='hardfail')return'fail';
+  if(v==='softfail')return'soft';
+  if(v==='none'||v==='neutral')return'none';
+  return'none';
+}
+function authIcon(v){const c=authClass(v);return c==='pass'?'✓':c==='fail'?'✗':c==='soft'?'~':'?';}
+function authBadge(label,val){
+  if(!val)return'';
+  const c=authClass(val);
+  const cls=c==='pass'?'b-pass':c==='fail'?'b-fail':c==='soft'?'b-soft':'b-none';
+  return`<span class="badge ${cls}">${authIcon(val)} ${label}: ${esc(val)}</span>`;
+}
+
+function delayClass(ms){
+  if(ms<0)return'none';
+  if(ms<10000)return'fast';
+  if(ms<60000)return'minor';
+  if(ms<600000)return'warn';
+  return'crit';
+}
+function delayLabel(ms){
+  if(ms<0)return'clock skew';
+  if(ms<1000)return'<1s';
+  if(ms<60000)return Math.round(ms/1000)+'s';
+  if(ms<3600000)return Math.round(ms/60000)+'m';
+  return(ms/3600000).toFixed(1)+'h';
+}
+function delayExplain(ms){
+  if(ms<0)return'Server clocks may be slightly out of sync — this is normal and harmless.';
+  if(ms<10000)return'Delivery was near-instant at this hop — no concern.';
+  if(ms<60000)return'Minor delay, likely normal processing, TLS negotiation, or brief queue.';
+  if(ms<600000)return'Noticeable delay. Possible causes: greylisting, content scanning, connector retry, or queue backlog.';
+  return'Significant delay. Likely causes: server queue congestion, greylisting, delivery retry loop, rate limiting, or remote server unavailability.';
+}
+
+function hopDescription(hop,i,total,sys){
+  const byName=sys?sys.name:(hop.by||'unknown server');
+  if(i===0&&total===1)return'Message sent and delivered directly';
+  if(i===0)return`Message submitted from sender${hop.fromHost?' ('+hop.fromHost+')':''}`;
+  if(i===total-1)return`Message delivered to recipient mailbox via ${byName}`;
+  if(sys){
+    if(sys.name.includes('Proofpoint'))return`Message scanned by ${sys.name}`;
+    if(sys.name.includes('Exchange Online Protection'))return`Message processed by Exchange Online Protection (EOP)`;
+    if(sys.name.includes('Exchange Online'))return`Message accepted by Exchange Online`;
+    if(sys.name.includes('Google'))return`Message handled by ${sys.name}`;
+    if(sys.name.includes('Mimecast')||sys.name.includes('Barracuda')||sys.name.includes('Cisco'))return`Message scanned by email security gateway (${sys.name})`;
+    return`Message transferred to ${sys.name}`;
+  }
+  return`Message transferred to ${hop.by||'mail server'}`;
+}
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ─── MS HEADER PARSING ────────────────────────────────────────────────────────
+function parseMSHeaders(hdrs){
+  const scl=getFirst(hdrs,'x-ms-exchange-organization-scl');
+  const bcl=getFirst(hdrs,'x-ms-exchange-organization-bcl');
+  const pcl=getFirst(hdrs,'x-ms-exchange-organization-pcl');
+  const ffas=getFirst(hdrs,'x-forefront-antispam-report');
+  const msas=getFirst(hdrs,'x-microsoft-antispam');
+  const netId=getFirst(hdrs,'x-ms-exchange-organization-network-message-id');
+  return{scl:scl?parseInt(scl):null,bcl:bcl?parseInt(bcl):null,pcl:pcl?parseInt(pcl):null,ffas,msas,netId};
+}
+function sclExplain(v){
+  if(v===null)return'Not set';
+  if(v<0)return'Bypass spam filtering';
+  if(v===0||v===1)return'Message is not spam';
+  if(v===5||v===6)return'Message likely spam — may go to Junk folder';
+  if(v===7||v===8||v===9)return'Message is high-confidence spam';
+  return'SCL '+v;
+}
+function bclExplain(v){
+  if(v===null)return'Not set';
+  if(v===0)return'Sender is not a bulk mailer';
+  if(v<=3)return'Low bulk complaint level';
+  if(v<=7)return'Moderate bulk — may reach some users junk';
+  return'High bulk complaint level — likely junk folder';
+}
+
+// ─── GENERATE FINDING ────────────────────────────────────────────────────────
+function generateFinding(hops,auth,authOrig,ms,totalDelay){
+  let findings=[];let conf='Medium';
+  const maxDelay=hops.reduce((mx,h,i)=>{
+    if(i===0||!h.delay)return mx;
+    return h.delay>mx?h.delay:mx;
+  },0);
+  const maxHop=hops.find((h,i)=>i>0&&h.delay===maxDelay);
+
+  // Detect gateway-induced auth failure: boundary MTA (e.g. EOP) sees failures
+  // but the pre-gateway auth (e.g. Proofpoint Authentication-Results-Original) shows passes
+  const gatewayRedeemedAuth=(authOrig.spf==='pass'||authOrig.dkim==='pass')&&
+    (auth.spf!=='pass'||auth.dkim!=='pass');
+  const hasGateway=hops.some(h=>h.sys&&(h.sys.name.includes('Proofpoint')||h.sys.name.includes('Mimecast')||h.sys.name.includes('Barracuda')||h.sys.name.includes('Cisco')));
+
+  if(maxDelay>600000){
+    const sys=maxHop?classifySystem(maxHop.by):null;
+    findings.push(`The message experienced a significant delay of ${delayLabel(maxDelay)}${sys?' at '+sys.name:''}, possibly due to queue congestion, greylisting, or rate limiting.`);
+    conf='High';
+  }
+
+  if(gatewayRedeemedAuth&&hasGateway){
+    // The gateway verified auth before forwarding; boundary MTA re-check failures are expected
+    findings.push('Authentication checks at the final mail gateway (e.g. Exchange Online) show failures, but this is expected: the message was first verified as legitimate by an intermediate security gateway (Proofpoint or similar), which re-stamped the headers. The original authentication passed at that gateway. This pattern is normal and does not indicate spoofing — it indicates a third-party email filter in the delivery path.');
+    conf='High';
+  } else if(auth.compauth==='pass'&&(auth.spf!=='pass'||auth.dmarc!=='pass')){
+    // Microsoft's composite auth overrode individual failures
+    findings.push('Individual authentication checks (SPF/DKIM/DMARC) show failures, but Microsoft composite authentication passed. This typically means Microsoft\'s systems recognized the sender as legitimate through implicit signals (e.g. known sending infrastructure, domain reputation) despite strict check failures — often caused by complex routing or third-party gateway processing.');
+    conf='High';
+  } else if(auth.spf==='fail'&&auth.dmarc==='fail'&&!hasGateway){
+    findings.push('Authentication failures were detected with no intermediate gateway to explain them — the message may be spoofed or the sender\'s mail system may be misconfigured.');
+    conf='High';
+  } else if(auth.spf==='softfail'&&auth.dkim==='fail'&&auth.dmarc==='fail'&&!gatewayRedeemedAuth){
+    findings.push('SPF soft-failed and DKIM failed, causing DMARC to fail. This may indicate the message was sent from a server not fully authorized by the sender\'s domain, or was processed by a gateway that broke DKIM signing. If no gateway is involved, this warrants scrutiny.');
+    conf='Medium';
+  } else if(auth.spf==='pass'&&auth.dkim==='pass'&&auth.dmarc==='pass'){
+    findings.push('All authentication checks passed. The message appears legitimate and was not tampered with in transit.');
+    conf='High';
+  } else if(auth.spf==='pass'&&auth.dkim==='pass'){
+    findings.push('SPF and DKIM passed. The message appears to be from a legitimate sender.');
+    conf='High';
+  }
+
+  if(ms.scl!==null&&ms.scl>=5){
+    findings.push(`Microsoft assigned a Spam Confidence Level of ${ms.scl} — the message was likely filtered to Junk Email.`);
+  }
+  if(hops.length>6&&!findings.some(f=>f.includes('hops'))){
+    findings.push(`The message passed through ${hops.length} hops. This is above average and consistent with routing through one or more third-party security gateways before reaching the destination mail server.`);
+  }
+  if(!findings.length){
+    if(totalDelay!==null){
+      findings.push(`Message delivered normally in ${delayLabel(totalDelay)} across ${hops.length} hop${hops.length!==1?'s':''}.`);
+    } else {
+      findings.push('Headers parsed successfully. No anomalies detected.');
+    }
+    conf='Medium';
+  }
+  return{text:findings.join(' '),conf};
+}
+
+// ─── MAIL PROVIDER DETECTION ─────────────────────────────────────────────────
+// Determines the final mail provider and whether hybrid Exchange is in play.
+// Returns { mailProvider, isHybrid }
+function detectMailProvider(hops, hdrs){
+  // Hybrid Exchange indicators in headers
+  const hasHybridHeaders=!!(
+    getFirst(hdrs,'x-ms-exchange-organization-messagedirectionality')||
+    getFirst(hdrs,'x-ms-exchange-crosstenant-id')||
+    getFirst(hdrs,'x-ms-exchange-transport-crosstenantheadersstamped')
+  );
+  // Look at last 3 hops for Exchange on-prem fingerprints
+  const lastHops=hops.slice(-3);
+  const hasEOP=lastHops.some(h=>h.sys&&h.sys.name.includes('Exchange Online Protection'));
+  const hasEXO=lastHops.some(h=>h.sys&&h.sys.name.includes('Exchange Online'));
+  const hasOnPrem=lastHops.some(h=>{
+    // On-prem Exchange hostnames typically: mail.domain.com, SERVERNAME.domain.local,
+    // or contain 'EXCH','MAIL','HUB','MBX' and are NOT *.outlook.com / *.protection.outlook.com
+    if(!h.by)return false;
+    const isCloud=/outlook\.com|office365|prod\.outlook|protection\.outlook|pphosted|mimecast|barracuda|google\.com|gmail/i.test(h.by);
+    const looksOnPrem=/exch|mbx|hub|cas\b|mail\.|smtp\./i.test(h.by)||/\.(local|internal|corp|lan)$/i.test(h.by);
+    return !isCloud&&looksOnPrem;
+  });
+  // Also check if last hop's software stamp looks like on-prem Exchange
+  const finalHop=hops[hops.length-1];
+  const finalBy=finalHop?finalHop.by||'':'';
+  const finalIsCloud=/outlook\.com|office365|prod\.outlook|google\.com|gmail/i.test(finalBy);
+  const finalIsOnPrem=!finalIsCloud&&/exch|mbx|hub|cas\b|mail\.|smtp\./i.test(finalBy);
+
+  let mailProvider='Unknown';
+  let isHybrid=false;
+
+  if(hasEOP||hasEXO||(hasHybridHeaders&&(hasEOP||hasEXO))){
+    if(hasHybridHeaders&&(hasOnPrem||finalIsOnPrem)){
+      mailProvider='On-prem Exchange / M365 Hybrid';
+      isHybrid=true;
+    } else {
+      mailProvider='Microsoft Exchange Online (M365)';
+    }
+  } else if(finalIsOnPrem||hasOnPrem){
+    // On-prem without cloud indicators — could still be hybrid if cross-tenant headers present
+    if(hasHybridHeaders){
+      mailProvider='On-prem Exchange / M365 Hybrid';
+      isHybrid=true;
+    } else {
+      mailProvider='On-prem Exchange';
+    }
+  } else if(finalBy&&/google\.com|gmail\.com|googlemail/i.test(finalBy)){
+    mailProvider='Google Workspace / Gmail';
+  } else if(finalBy&&/amazonses|ses\.amazonaws/i.test(finalBy)){
+    mailProvider='Amazon SES';
+  } else if(finalHop&&finalHop.sys&&finalHop.sys.type==='cloud'){
+    mailProvider=finalHop.sys.name;
+  } else if(finalHop&&finalHop.sys){
+    mailProvider=finalHop.sys.name;
+  }
+
+  return{mailProvider,isHybrid};
+}
+
+
+function decodeHeaders(){
+  const raw=document.getElementById('headerInput').value.trim();
+  if(!raw){return;}
+  const hdrs=parseHeaders(raw);
+  if(!hdrs.length){
+    document.getElementById('results').innerHTML='<div class="error-box">⚠ Could not parse headers. Paste the full raw email headers.</div>';
+    return;
+  }
+
+  const from=getFirst(hdrs,'from')||'—';
+  // To: may be absent — fall back to envelope recipient from Received headers
+  let to=getFirst(hdrs,'to');
+  if(!to||to==='—'){
+    const receivedForMatch=getAll(hdrs,'received').map(v=>{const m=v.match(/for\s+<([^>]+)>/i);return m?m[1]:null;}).find(Boolean);
+    const deliveredTo=getFirst(hdrs,'delivered-to')||getFirst(hdrs,'x-forwarded-to')||getFirst(hdrs,'x-original-to');
+    to=receivedForMatch||deliveredTo||'—';
+  }
+  const subject=getFirst(hdrs,'subject')||'—';
+  const date=getFirst(hdrs,'date')||'—';
+  const msgId=getFirst(hdrs,'message-id')||'—';
+  const replyTo=getFirst(hdrs,'reply-to');
+  const mailer=getFirst(hdrs,'x-mailer')||getFirst(hdrs,'user-agent');
+  const returnPath=getFirst(hdrs,'return-path');
+
+  const receivedVals=getAll(hdrs,'received');
+  const rawHops=receivedVals.map(v=>parseReceived(v)).reverse();
+  const hops=rawHops.map((h,i)=>{
+    const delay=(i>0&&h.date&&rawHops[i-1].date)?(h.date-rawHops[i-1].date):null;
+    const sys=classifySystem(h.by,h.with)||classifySystem(h.fromHost,h.with);
+    const desc=hopDescription(h,i,rawHops.length,sys);
+    return{...h,delay,sys,desc,index:i};
+  });
+
+  const authVals=getAll(hdrs,'authentication-results');
+  let auth={};
+  for(const v of authVals)Object.assign(auth,parseAuth(v));
+  const spfHdr=getFirst(hdrs,'received-spf');
+  if(!auth.spf&&spfHdr){const m=spfHdr.match(/^(\S+)/);if(m)auth.spf=m[1].toLowerCase();}
+  if(!auth.dkim&&getFirst(hdrs,'dkim-signature'))auth.dkim='present';
+  const arcVals=getAll(hdrs,'arc-authentication-results');
+  if(arcVals.length&&!auth.arc){const ap=parseAuth(arcVals[0]);if(ap.arc)auth.arc=ap.arc;}
+
+  const ms=parseMSHeaders(hdrs);
+  const spamStatus=getFirst(hdrs,'x-spam-status');
+  const spamScore=getFirst(hdrs,'x-spam-score');
+
+  // ── GATEWAY MODE DETECTION ────────────────────────────────────────────────
+  const gw=detectGatewayMode(hops,auth,hdrs);
+  const {gatewayMode,gatewayHop,authOrig,effectiveAuth}=gw;
+  const gwName=(gatewayHop&&gatewayHop.sys?gatewayHop.sys.name:gw.detectedGatewayName)||'Security Gateway';
+  const gatewayNote=gatewayMode?` (verified by ${gwName} before forwarding)`:'';
+
+  // Detect final mail provider and hybrid Exchange
+  const {mailProvider,isHybrid}=detectMailProvider(hops,hdrs);
+
+  let totalDelay=null;
+  if(hops.length>=2&&hops[0].date&&hops[hops.length-1].date){
+    totalDelay=hops[hops.length-1].date-hops[0].date;
+  }
+  const maxDelay=hops.reduce((mx,h)=>h.delay&&h.delay>mx?h.delay:mx,0);
+  const finding=generateFinding(hops,auth,authOrig,ms,totalDelay);
+
+  // known extra headers to skip in "additional" section
+  const knownKeys=new Set(['received','from','to','subject','date','message-id','reply-to',
+    'mime-version','content-type','content-transfer-encoding','dkim-signature',
+    'x-google-dkim-signature','received-spf','authentication-results','delivered-to',
+    'x-forwarded-to','x-original-to','x-mailer','x-spam-status','x-spam-score',
+    'x-spam-flag','return-path','arc-seal','arc-message-signature','arc-authentication-results',
+    'x-ms-exchange-organization-scl','x-ms-exchange-organization-pcl','x-ms-exchange-organization-bcl',
+    'x-forefront-antispam-report','x-microsoft-antispam','x-ms-exchange-organization-network-message-id',
+    'x-ms-has-attach','x-ms-tnef-correlator','list-unsubscribe','list-id','user-agent']);
+  const extra=hdrs.filter(h=>!knownKeys.has(h.name.toLowerCase()));
+
+  let html='';
+
+  // ── 1. EXECUTIVE SUMMARY ─────────────────────────────────────────────────
+  const dateLocal=(()=>{try{const d=new Date(date);return isNaN(d)?date:d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});}catch(e){return date;}})();
+  const confDots=(()=>{const dots=[];for(let i=0;i<4;i++){const filled=(finding.conf==='High')||(finding.conf==='Medium'&&i<2)||(finding.conf==='Low'&&i<1);dots.push('<div class="conf-dot'+(filled?' filled':'')+'"></div>');}return dots.join('');})();
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-blue">📊</div><div><div class="card-title">Executive Summary</div><div class="card-desc">What happened to this message?</div></div></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div class="sum-item"><div class="sum-lbl">From (Sender)</div><div class="sum-val" style="font-size:14px;font-weight:600;">${esc(from)}</div></div>
+    <div class="sum-item"><div class="sum-lbl">To (Recipient)</div><div class="sum-val" style="font-size:14px;font-weight:600;">${esc(to)}</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;">
+    <div class="sum-item"><div class="sum-lbl">Subject</div><div class="sum-val" style="font-size:13px;">${esc(subject)}</div></div>
+    <div class="sum-item" style="min-width:220px;"><div class="sum-lbl">Date Sent (your local time)</div><div class="sum-val" style="font-size:13px;">${esc(dateLocal)}</div></div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+    <div class="sum-item" style="flex:1;min-width:120px;"><div class="sum-lbl">Delivery Time</div><div class="sum-val">${totalDelay!==null?delayLabel(totalDelay):'Unknown'}</div></div>
+    <div class="sum-item" style="flex:1;min-width:80px;"><div class="sum-lbl">Hops</div><div class="sum-val">${hops.length}</div></div>
+    <div class="sum-item" style="flex:1;min-width:100px;"><div class="sum-lbl">Largest Delay</div><div class="sum-val"><span class="delay-pill dp-${delayClass(maxDelay)}">${maxDelay>0?delayLabel(maxDelay):'None'}</span></div></div>
+    <div class="sum-item" style="flex:2;min-width:180px;"><div class="sum-lbl">Auth Result${gatewayMode?' (gateway-verified)':''}</div><div class="sum-val" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;">
+      ${authBadge('SPF',effectiveAuth.spf)} ${authBadge('DKIM',effectiveAuth.dkim)} ${authBadge('DMARC',effectiveAuth.dmarc)}
+    </div></div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+    <div class="sum-item" style="flex:2;min-width:200px;">
+      <div class="sum-lbl">Detected Mail Provider</div>
+      <div class="sum-val" style="display:flex;align-items:center;gap:6px;">
+        <span>${esc(mailProvider)}</span>
+        ${isHybrid?'<span class="badge b-blue" style="font-size:10px;">Hybrid</span>':''}
+      </div>
+    </div>
+    <div class="sum-item" style="flex:2;min-width:200px;">
+      <div class="sum-lbl">Detected Third-Party Gateway</div>
+      <div class="sum-val" style="display:flex;align-items:center;gap:6px;">
+        ${gatewayMode?'<span class="badge b-purple" style="font-size:11px;">🛡 '+esc(gwName)+'</span>':'<span style="color:var(--text-muted);">None detected</span>'}
+      </div>
+    </div>
+    ${mailer?'<div class="sum-item" style="flex:1;min-width:140px;"><div class="sum-lbl">Mail Client</div><div class="sum-val">'+esc(mailer)+'</div></div>':''}
+    ${returnPath?'<div class="sum-item" style="flex:2;min-width:180px;"><div class="sum-lbl">Return-Path</div><div class="sum-val mono">'+esc(returnPath)+'</div></div>':''}
+  </div>
+
+  <div class="finding-box">
+    <div class="finding-label">🔍 Most Likely Finding</div>
+    <div class="finding-text">${esc(finding.text)}</div>
+    <div class="confidence-row">
+      <div class="conf-dots">${confDots}</div>
+      <div class="conf-label">Confidence: <b>${finding.conf}</b></div>
+    </div>
+  </div>
+</div>`;
+
+  // ── 2. AUTHENTICATION SUMMARY ────────────────────────────────────────────
+  // Extract sender domain for contextual wording
+  const senderDomainM=(from||'').match(/@([\w.\-]+)/);
+  const senderDomain=senderDomainM?senderDomainM[1]:'the sender\'s domain';
+
+  const authDefs=[
+    {key:'spf',label:'SPF',fullName:'Sender Policy Framework',
+     status:{
+       pass:{badge:'b-pass',short:'Pass',headline:'Sending server is authorized',
+         detail:'The server that delivered this message (IP: '+(hops[0]&&hops[0].ip||'unknown')+') is listed in '+senderDomain+'\'s SPF DNS record as an approved mail sender. This means '+senderDomain+' has explicitly said "this server is allowed to send email on our behalf."'},
+       fail:{badge:'b-fail',short:'Fail (Hard)',headline:'Server NOT authorized — high risk',
+         detail:'The delivering server is not in '+senderDomain+'\'s SPF record and the record ends in -all (hard fail), meaning '+senderDomain+' has explicitly said no unauthorized servers should be trusted. This is a strong indicator of spoofing or a misconfigured mail system at '+senderDomain+'.'},
+       softfail:{badge:'b-soft',short:'Softfail',headline:'Server not authorized — low confidence',
+         detail:'The delivering server is not listed in '+senderDomain+'\'s SPF record, but the record ends in ~all (soft fail). This means '+senderDomain+' configured SPF to flag unauthorized senders without outright rejecting them — often seen during mail system migrations or with complex routing. It is suspicious but not conclusive. Your mail system may still accept or junk this message depending on DMARC policy.'},
+       none:{badge:'b-none',short:'None',headline:'No SPF record found',
+         detail:senderDomain+' has no SPF record published in DNS. This means there is no way to verify whether the sending server is authorized. Absence of SPF is not inherently malicious but is a configuration gap on '+senderDomain+'\'s side.'},
+       neutral:{badge:'b-none',short:'Neutral',headline:'SPF explicitly takes no stance',
+         detail:senderDomain+'\'s SPF record ends in ?all, meaning they have published a record but are explicitly saying "we make no claim about whether this server is authorized." This provides no real protection.'},
+     }
+    },
+    {key:'dkim',label:'DKIM',fullName:'DomainKeys Identified Mail',
+     status:{
+       pass:{badge:'b-pass',short:'Pass',headline:'Message signature is valid',
+         detail:'This message carries a cryptographic signature created by '+senderDomain+' (or a service they authorize). Your mail system verified that signature successfully, which means the message content was not altered between when '+senderDomain+' sent it and when you received it. It also confirms the message genuinely originated from a system '+senderDomain+' trusts.'},
+       fail:{badge:'b-fail',short:'Fail',headline:'Signature invalid or absent',
+         detail:'Either '+senderDomain+' did not sign this message with DKIM, or the signature was present but failed verification. A failed signature could mean the message was altered in transit, the sending system at '+senderDomain+' is not configured for DKIM, or the message was forwarded in a way that broke the signature.'},
+       present:{badge:'b-none',short:'Present',headline:'Signature present, result unclear',
+         detail:'A DKIM-Signature header was found indicating '+senderDomain+' or a delegated service attempted to sign this message, but this analyzer could not confirm the pass/fail result from the Authentication-Results header. Check the raw headers for more detail.'},
+       none:{badge:'b-none',short:'None',headline:'No DKIM signature found',
+         detail:senderDomain+' did not sign this message with DKIM. This is a configuration gap — DKIM is not required, but its absence means you cannot verify the message was unaltered, and DMARC alignment via DKIM is not possible.'},
+     }
+    },
+    {key:'dmarc',label:'DMARC',fullName:'Domain-based Message Authentication',
+     status:{
+       pass:{badge:'b-pass',short:'Pass',headline:'Policy check passed',
+         detail:'DMARC passed, meaning this message is aligned with '+senderDomain+'\'s published policy. At least one of SPF or DKIM passed AND the authenticated domain aligns with the From header address. This is the strongest indicator that the message is legitimately from '+senderDomain+'.'},
+       fail:{badge:'b-fail',short:'Fail',headline:'Policy check failed — spoofing risk',
+         detail:'DMARC failed for '+senderDomain+'. Neither SPF nor DKIM produced an authenticated domain that aligns with the From: address. This means the message claims to be from '+senderDomain+' but cannot be verified as such. What happens next depends on '+senderDomain+'\'s DMARC policy (p=): reject means your server should have blocked it, quarantine means junk folder, none means no action is enforced.'},
+       none:{badge:'b-none',short:'None',headline:'No DMARC policy found',
+         detail:senderDomain+' has not published a DMARC record. Without DMARC, there is no policy telling receiving mail servers what to do when SPF or DKIM fails. The message may still be legitimate — many domains have not yet deployed DMARC.'},
+     }
+    },
+    {key:'arc',label:'ARC',fullName:'Authenticated Received Chain',
+     status:{
+       pass:{badge:'b-pass',short:'Pass',headline:'Forwarding chain intact',
+         detail:'ARC headers indicate this message was forwarded or processed by an intermediary (such as a mailing list or email forwarding service) and the ARC chain verifying its authentication at each prior hop is intact. This helps preserve trust across forwarding scenarios where SPF/DKIM might otherwise break.'},
+       fail:{badge:'b-fail',short:'Fail',headline:'Forwarding chain broken',
+         detail:'The ARC chain is invalid, meaning a prior hop\'s authentication record could not be verified. This can indicate message modification after an intermediate hop, or a misconfigured forwarding system.'},
+       none:{badge:'b-none',short:'N/A',headline:'Not applicable',
+         detail:'No ARC headers were found. ARC is only relevant for forwarded messages (mailing lists, mail forwarding services). Its absence is normal for directly delivered messages.'},
+     }
+    },
+    {key:'compauth',label:'CompAuth',fullName:'Microsoft Composite Authentication',
+     status:{
+       pass:{badge:'b-pass',short:'Pass',headline:'Microsoft combined check passed',
+         detail:'Microsoft\'s Exchange Online Protection evaluated SPF, DKIM, DMARC and implicit authentication signals together and determined this message is likely legitimate. This is a Microsoft-specific verdict used when strict individual checks might be inconclusive.'},
+       fail:{badge:'b-fail',short:'Fail',headline:'Microsoft combined check failed',
+         detail:'Microsoft\'s composite authentication failed. EOP considers this message suspicious based on a combination of SPF, DKIM, DMARC, and behavioral signals. The reason code '+(auth.compReason||'(not found)')+' provides further detail — reason 000 means explicit failure, 001 means implicit failure.'},
+       none:{badge:'b-none',short:'N/A',headline:'Not evaluated',
+         detail:'No Microsoft composite authentication header was found. This is normal for non-Microsoft mail environments.'},
+     }
+    },
+  ];
+
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-green">🛡</div><div>
+    <div class="card-title">Authentication Summary</div>
+    <div class="card-desc">These checks verify the sender\'s domain (<b>${esc(senderDomain)}</b>) — not your mail system. Click any row for detail.</div>
+  </div></div>
+  ${gatewayMode?`<div style="background:var(--green-dim);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start;">
+    <span style="font-size:18px;flex-shrink:0;">✅</span>
+    <div>
+      <div style="font-weight:600;font-size:13px;color:var(--green);margin-bottom:4px;">Third-party gateway routing detected — results shown are gateway-verified</div>
+      <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+        This message was routed through <b>${esc(gwName)}</b> before reaching the final mail server.
+        ${esc(gwName)} checked authentication at that point and recorded
+        <b>SPF ${esc(authOrig.spf||'—')}</b> / <b>DKIM ${esc(authOrig.dkim||'—')}</b> / <b>DMARC ${esc(authOrig.dmarc||'—')}</b>.
+        The final boundary server re-checked after gateway processing and saw failures — this is a known artifact of third-party gateway routing (the gateway may modify headers or forward from its own IP, breaking SPF/DKIM alignment).
+        The results below reflect <b>the gateway\'s verified results</b>, which are the reliable ones for this message.
+        Where the boundary result differs, it is noted.
+      </div>
+    </div>
+  </div>`:''}
+  <div style="display:flex;flex-direction:column;gap:6px;" id="authList">`;
+
+  for(const d of authDefs){
+    // Use effectiveAuth (gateway results when gatewayMode, raw auth otherwise)
+    const v=effectiveAuth[d.key];
+    const rawV=auth[d.key]; // what the boundary server actually saw
+    if(!v&&d.key==='arc')continue;
+    if(!v&&d.key==='compauth')continue;
+    const statusKey=v||'none';
+    const s=d.status[statusKey]||d.status['none'];
+    const c=authClass(v||'none');
+    const borderColor=c==='pass'?'rgba(34,197,94,.3)':c==='fail'?'rgba(239,68,68,.3)':c==='soft'?'rgba(245,158,11,.3)':'var(--border)';
+    // When gateway mode overrode a failure, note it inline
+    const wasOverridden=gatewayMode&&rawV&&rawV!==v&&['spf','dkim','dmarc'].includes(d.key);
+    const overrideNote=wasOverridden?` <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(boundary saw: ${esc(rawV)} — overridden by gateway result)</span>`:'';
+    html+=`<div class="auth-expand-item" style="border:1px solid ${borderColor};border-radius:8px;overflow:hidden;">
+      <div class="auth-expand-hd" onclick="toggleAuthItem(this)" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--bg-card2);">
+        <div style="min-width:80px;font-weight:700;font-size:13px;">${d.label}${overrideNote}</div>
+        <div style="font-size:11px;color:var(--text-muted);flex:0 0 auto;">${d.fullName}</div>
+        <div style="flex:1;font-size:12px;color:var(--text-secondary);">${esc(s.headline)}</div>
+        <span class="badge ${s.badge}">${authIcon(v||'none')} ${s.short}</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">▼</span>
+      </div>
+      <div class="auth-expand-body" style="display:none;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;border-top:1px solid var(--border);background:var(--bg-input);">
+        ${esc(s.detail)}
+        ${wasOverridden?'<div style="margin-top:8px;padding:8px 10px;background:var(--bg-card2);border-radius:6px;font-size:12px;color:var(--text-muted);border:1px solid var(--border);">⚠ Note: The final boundary mail server (e.g. Exchange Online) recorded <b>'+esc(rawV)+'</b> for this check. The result shown above comes from <b>'+esc(effectiveAuth._gateway||'the security gateway')+'</b>, which verified authentication before forwarding. The gateway result is more reliable in this routing path.</div>':''}
+      </div>
+    </div>`;
+  }
+
+  if(spamStatus){
+    const isSpam=!spamStatus.toLowerCase().includes('no');
+    html+=`<div class="auth-expand-item" style="border:1px solid ${isSpam?'rgba(239,68,68,.3)':'rgba(34,197,94,.3)'};border-radius:8px;overflow:hidden;">
+      <div class="auth-expand-hd" onclick="toggleAuthItem(this)" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--bg-card2);">
+        <div style="min-width:80px;font-weight:700;font-size:13px;">Spam</div>
+        <div style="font-size:11px;color:var(--text-muted);flex:0 0 auto;">SpamAssassin</div>
+        <div style="flex:1;font-size:12px;color:var(--text-secondary);">${isSpam?'Message flagged as spam':'Message not flagged as spam'}</div>
+        <span class="badge ${isSpam?'b-fail':'b-pass'}">${isSpam?'✗ Spam':'✓ Clean'}</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">▼</span>
+      </div>
+      <div class="auth-expand-body" style="display:none;padding:12px 14px;font-size:13px;color:var(--text-secondary);line-height:1.6;border-top:1px solid var(--border);background:var(--bg-input);">
+        SpamAssassin scored this message ${spamScore?'at '+esc(spamScore)+' points. ':''}${isSpam?'A score above the threshold caused it to be flagged. This is a content-based analysis by your receiving mail server — it does not directly relate to '+senderDomain+'\'s configuration.':'Below the spam threshold. Content analysis found no significant spam signals.'}
+      </div>
+    </div>`;
+  }
+
+  html+=`</div>`;
+
+  html+=`</div>`;
+
+  // ── 3. MESSAGE JOURNEY TIMELINE ───────────────────────────────────────────
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-blue">🗺</div><div><div class="card-title">Message Journey — ${hops.length} hop${hops.length!==1?'s':''}</div><div class="card-desc">Every system the message passed through, in order</div></div></div>
+  ${totalDelay!==null?`<div class="info-box" style="margin-bottom:14px;"><span>⏱</span><span>Total delivery time: <b>${delayLabel(totalDelay)}</b></span></div>`:''}
+  <div class="timeline-controls">
+    <button class="btn-ghost" onclick="expandAll()">Expand All</button>
+    <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
+    <span>${hops.length} hop${hops.length!==1?'s':''} detected</span>
+  </div>
+  <div class="hop-wrap" id="hopWrap">`;
+
+  hops.forEach((hop,i)=>{
+    const isFirst=i===0,isLast=i===hops.length-1;
+    const numCls=isFirst?'n-first':isLast?'n-last':(hop.delay&&hop.delay>600000)?'n-crit':'n-mid';
+    const cardCls=isFirst?'hop-first':isLast?'hop-last':(hop.delay&&hop.delay>600000)?'hop-critical':(hop.delay&&hop.delay>60000)?'hop-warn':'';
+    const dc=hop.delay!==null?delayClass(hop.delay):'none';
+    const sys=hop.sys;
+    const hasTLS=hop.tls||/TLS|ESMTPS|STARTTLS/i.test(hop.with||'');
+    const noTLS=!hasTLS&&hop.with&&/SMTP/i.test(hop.with);
+
+    if(i>0){
+      html+=`<div class="hop-connector"><div class="hop-connector-icon">↓</div></div>`;
+    }
+
+    html+=`<div class="hop-card ${cardCls}" id="hop-${i}">
+      <div class="hop-summary" onclick="toggleHop(${i})">
+        <div class="hop-num-badge ${numCls}">${isFirst?'⊙':isLast?'✓':i+1}</div>
+        <div class="hop-summary-body">
+          <div class="hop-summary-title">${esc(hop.desc)}</div>
+          <div class="hop-summary-meta">
+            ${hop.date&&!isNaN(hop.date)?`<span>🕐 ${hop.date.toUTCString()}</span>`:''}
+            ${hop.from?`<span>From: ${esc(hop.from.length>40?hop.from.substring(0,40)+'…':hop.from)}</span>`:''}
+            ${hop.by?`<span>To: ${esc(hop.by.length>40?hop.by.substring(0,40)+'…':hop.by)}</span>`:''}
+          </div>
+        </div>
+        <div class="hop-right">
+          ${sys?`<span class="sys-badge">🏷 ${esc(sys.name)}</span>`:''}
+          ${hasTLS?`<span class="tls-badge">🔒 TLS</span>`:noTLS?`<span class="notls-badge">⚠ No TLS</span>`:''}
+          ${hop.delay!==null?`<span class="delay-pill dp-${dc}">+${delayLabel(hop.delay)}</span>`:`<span class="delay-pill dp-none">origin</span>`}
+          <span class="chevron" id="chev-${i}">▼</span>
+        </div>
+      </div>
+      <div class="hop-detail" id="hd-${i}">
+        <div class="hop-detail-grid">
+          ${hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source Hostname</div><div class="hd-val">${esc(hop.fromHost)}</div></div>`:''}
+          ${hop.from&&hop.from!==hop.fromHost?`<div class="hd-item"><div class="hd-lbl">Source (reported)</div><div class="hd-val">${esc(hop.from)}</div></div>`:''}
+          ${hop.by?`<div class="hd-item"><div class="hd-lbl">Destination Hostname</div><div class="hd-val">${esc(hop.by)}</div></div>`:''}
+          ${hop.ip?`<div class="hd-item"><div class="hd-lbl">Source IP</div><div class="hd-val">${esc(hop.ip)}</div></div>`:''}
+          ${hop.with?`<div class="hd-item"><div class="hd-lbl">Protocol</div><div class="hd-val">${esc(hop.with)}</div></div>`:''}
+          ${hop.tls?`<div class="hd-item"><div class="hd-lbl">TLS Version</div><div class="hd-val good">${esc(hop.tls)}</div></div>`:''}
+          ${hop.queueId?`<div class="hd-item"><div class="hd-lbl">Queue / Message ID</div><div class="hd-val">${esc(hop.queueId)}</div></div>`:''}
+          ${hop.for?`<div class="hd-item"><div class="hd-lbl">Envelope Recipient</div><div class="hd-val">${esc(hop.for)}</div></div>`:''}
+          ${hop.date&&!isNaN(hop.date)?`<div class="hd-item"><div class="hd-lbl">Timestamp (UTC)</div><div class="hd-val">${esc(hop.date.toUTCString())}</div></div>`:''}
+          ${sys?`<div class="hd-item"><div class="hd-lbl">System Identified</div><div class="hd-val">${esc(sys.name)}</div></div>`:''}
+        </div>
+        ${hop.delay!==null?`
+          <div class="delay-bar-wrap">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Delay at this hop: <b>${delayLabel(hop.delay)}</b></div>
+            <div class="delay-bar-bg"><div class="delay-bar db-${dc}" style="width:${maxDelay>0?Math.min(100,Math.round(hop.delay/maxDelay*100)):0}%"></div></div>
+          </div>
+          <div class="hop-notes ${dc==='crit'?'crit':dc==='warn'?'warn':''}" style="margin-top:8px;">${esc(delayExplain(hop.delay))}</div>
+        `:''}
+        <div onclick="toggleRaw(${i})" class="hop-raw-toggle">▶ Show raw Received header</div>
+        <div class="hop-raw" id="hr-${i}">${esc(hop.raw)}</div>
+      </div>
+    </div>`;
+  });
+
+  html+=`</div></div>`;
+
+  // ── 3. SECURITY ANALYSIS (follows auth) ─────────────────────────────────
+  const senderIP=hops.length?hops[0].ip:null;
+  const firstHop=hops[0]||{};
+  const tlsHops=hops.filter(h=>h.tls||/TLS|ESMTPS/i.test(h.with||'')).length;
+  const noTlsHops=hops.filter(h=>!h.tls&&h.with&&/^SMTP$/i.test(h.with)).length;
+
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-red">🔐</div><div>
+    <div class="card-title">Security Analysis</div>
+    <div class="card-desc">${gatewayMode?'Results reflect <b>'+esc(gwName)+'</b> gateway verification — boundary re-check failures suppressed':'Your mail system\'s view of this message\'s trustworthiness'}</div>
+  </div></div>
+  <div class="sec-grid">
+    <div class="sec-item${effectiveAuth.spf==='pass'?'':effectiveAuth.spf==='softfail'?' style="border-color:rgba(245,158,11,.3);"':' style="border-color:rgba(239,68,68,.3);"'}">
+      <div class="sec-q">Is the sender authorized?</div>
+      <div class="sec-a" style="color:${effectiveAuth.spf==='pass'?'var(--green)':effectiveAuth.spf==='softfail'?'var(--orange)':'var(--red)'}">
+        ${effectiveAuth.spf==='pass'?'✓ Yes — SPF passed':effectiveAuth.spf==='softfail'?'~ Possibly — SPF softfail':effectiveAuth.spf==='fail'?'✗ No — SPF hard fail':'? SPF: '+(effectiveAuth.spf||'not checked')}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
+        ${effectiveAuth.spf==='pass'?senderDomain+' DNS records list the sending server as authorized.'+( gatewayMode&&auth.spf!=='pass'?' The boundary server saw SPF '+esc(auth.spf||'unknown')+' because '+esc(gwName)+' forwards from its own IP pool, not '+senderDomain+'\'s original sending IP.':''):effectiveAuth.spf==='softfail'?'The sending server is not in '+senderDomain+'\'s approved list, but '+senderDomain+' configured SPF to allow soft failures (~all). Could be legitimate but misconfigured.':effectiveAuth.spf==='fail'?'The sending server is explicitly not authorized by '+senderDomain+' (-all). Strong spoofing indicator.':'Could not verify whether the sending server is authorized by '+senderDomain+'.'}
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-q">Was the connection encrypted (TLS)?</div>
+      <div class="sec-a" style="color:${tlsHops>0?'var(--green)':noTlsHops>0?'var(--red)':'var(--text-muted)'}">
+        ${tlsHops>0?'✓ Yes — '+tlsHops+' of '+hops.length+' hops used TLS':noTlsHops>0?'✗ No — '+noTlsHops+' hop'+(noTlsHops>1?'s':'')+' used plain SMTP':'? TLS status not detected'}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
+        TLS encrypts the message as it travels between mail servers, preventing interception in transit. It does not verify the sender\'s identity — that is SPF/DKIM\'s job.
+      </div>
+    </div>
+    <div class="sec-item${effectiveAuth.dmarc==='pass'?'':' style="border-color:rgba(239,68,68,.3);"'}">
+      <div class="sec-q">Did DMARC policy pass?</div>
+      <div class="sec-a" style="color:${effectiveAuth.dmarc==='pass'?'var(--green)':effectiveAuth.dmarc==='fail'?'var(--red)':'var(--text-muted)'}">
+        ${effectiveAuth.dmarc==='pass'?'✓ Yes — message is aligned with '+senderDomain:effectiveAuth.dmarc==='fail'?'✗ No — message failed '+senderDomain+'\'s policy':'? '+(effectiveAuth.dmarc||'Not evaluated')}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
+        ${effectiveAuth.dmarc==='pass'?'DMARC passed at the gateway — the From: address aligns with '+senderDomain+'.'+( gatewayMode&&auth.dmarc!=='pass'?' The boundary server later recorded DMARC '+esc(auth.dmarc||'unknown')+' because the gateway forwarding path broke alignment.':''):'DMARC is the strongest anti-spoofing check. A fail means this message claimed to be from '+senderDomain+' but could not prove it.'}
+      </div>
+    </div>
+    <div class="sec-item${effectiveAuth.dkim==='pass'?'':' style="border-color:rgba(239,68,68,.3);"'}">
+      <div class="sec-q">Was the message signed (DKIM)?</div>
+      <div class="sec-a" style="color:${effectiveAuth.dkim==='pass'?'var(--green)':effectiveAuth.dkim==='fail'?'var(--red)':'var(--text-muted)'}">
+        ${effectiveAuth.dkim==='pass'?'✓ Valid — signed by '+senderDomain:effectiveAuth.dkim==='fail'?'✗ Invalid or missing signature':effectiveAuth.dkim==='present'?'~ Signature present, result unclear':'? Not signed'}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
+        ${effectiveAuth.dkim==='pass'?senderDomain+' signed this message and the signature was verified by the gateway.'+( gatewayMode&&auth.dkim!=='pass'?' The boundary server recorded DKIM '+esc(auth.dkim||'unknown')+' — this is expected when a gateway re-processes the message body, which can invalidate the original signature.':''):'A valid DKIM signature proves '+senderDomain+' signed this message and that it was not altered after signing.'}
+      </div>
+    </div>
+    ${senderIP?`<div class="sec-item"><div class="sec-q">Originating IP address</div><div class="sec-a mono" style="font-size:13px;">${esc(senderIP)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">The IP address of the first mail server that handled this message${gatewayMode?' (before routing through '+esc(gwName)+')':''}</div></div>`:''}
+    ${firstHop.fromHost?`<div class="sec-item"><div class="sec-q">Sending server hostname (HELO)</div><div class="sec-a mono" style="font-size:13px;">${esc(firstHop.fromHost)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">How the sending server identified itself when connecting. This can be forged, but mismatches with SPF/DKIM results are a red flag.</div></div>`:''}
+    <div class="sec-item">
+      <div class="sec-q">Spam content verdict</div>
+      <div class="sec-a" style="color:${spamStatus&&!spamStatus.toLowerCase().includes('no')?'var(--red)':spamStatus?'var(--green)':'var(--text-muted)'}">
+        ${spamStatus?(spamStatus.toLowerCase().includes('no')?'✓ Not flagged as spam':'✗ Flagged as spam'):'? Not evaluated by this path'}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">Content-based spam scan by your receiving mail system, separate from sender authentication.</div>
+    </div>
+    ${noTlsHops>0?`<div class="sec-item" style="border-color:rgba(245,158,11,.4);"><div class="sec-q">⚠ Unencrypted relay hops</div><div class="sec-a" style="color:var(--orange);">${noTlsHops} hop${noTlsHops>1?'s':''} used plain SMTP (no TLS)</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">Message content was transmitted unencrypted between these servers, making it theoretically interceptable at those points.</div></div>`:''}
+  </div>
+</div>`;
+
+  // ── 5. DELIVERY ANALYSIS ─────────────────────────────────────────────────
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-orange">⏱</div><div><div class="card-title">Delivery Analysis</div></div></div>`;
+
+  if(hops.length>=2){
+    const avgDelay=hops.slice(1).filter(h=>h.delay!==null).reduce((a,h)=>a+h.delay,0)/hops.slice(1).filter(h=>h.delay!==null).length;
+    html+=`<div class="sum-grid" style="margin-bottom:14px;">
+      <div class="sum-item"><div class="sum-lbl">Total Delivery Time</div><div class="sum-val">${totalDelay!==null?delayLabel(totalDelay):'Unknown'}</div></div>
+      <div class="sum-item"><div class="sum-lbl">Number of Hops</div><div class="sum-val">${hops.length}</div></div>
+      <div class="sum-item"><div class="sum-lbl">Largest Delay</div><div class="sum-val"><span class="delay-pill dp-${delayClass(maxDelay)}">${maxDelay>0?delayLabel(maxDelay):'None'}</span></div></div>
+      <div class="sum-item"><div class="sum-lbl">Average Hop Delay</div><div class="sum-val">${isNaN(avgDelay)?'—':delayLabel(avgDelay)}</div></div>
+    </div>`;
+    html+=`<div class="del-timeline">`;
+    hops.forEach((hop,i)=>{
+      if(i===0)return;
+      const d=hop.delay;
+      if(d===null)return;
+      const dc2=delayClass(d);
+      const barW=maxDelay>0?Math.min(100,Math.round(d/maxDelay*100)):1;
+      const colorMap={fast:'var(--green)',minor:'var(--yellow)',warn:'var(--orange)',crit:'var(--red)',none:'var(--border)'};
+      html+=`<div class="del-hop">
+        <span style="font-size:11px;color:var(--text-muted);min-width:40px;">Hop ${i}→${i+1}</span>
+        <div class="del-bar-outer"><div class="del-bar-inner" style="width:${barW}%;background:${colorMap[dc2]};"></div></div>
+        <span class="delay-pill dp-${dc2}" style="min-width:48px;text-align:center;">${delayLabel(d)}</span>
+        <span style="font-size:11px;color:var(--text-muted);max-width:300px;">${esc((hop.sys?hop.sys.name:hop.by)||'')}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  } else {
+    html+=`<div class="text-muted text-sm">Not enough Received headers to calculate hop-by-hop timing.</div>`;
+  }
+  html+=`</div>`;
+
+  // ── MICROSOFT-SPECIFIC ────────────────────────────────────────────────────
+  if(ms.scl!==null||ms.bcl!==null||ms.pcl!==null||ms.ffas){
+    html+=`<div class="card">
+    <div class="card-hd"><div class="card-icon ci-blue">☁</div><div><div class="card-title">Microsoft-Specific Analysis</div><div class="card-desc">Exchange Online and Defender anti-spam verdicts</div></div></div>
+    <div class="ms-grid">`;
+    if(ms.scl!==null)html+=`<div class="ms-item"><div class="ms-val" style="color:${ms.scl>=5?'var(--red)':ms.scl>=1?'var(--orange)':'var(--green)'}">${ms.scl}</div><div class="ms-lbl">Spam Confidence Level (SCL)</div><div class="ms-explain">${esc(sclExplain(ms.scl))}</div></div>`;
+    if(ms.bcl!==null)html+=`<div class="ms-item"><div class="ms-val" style="color:${ms.bcl>=7?'var(--red)':ms.bcl>=4?'var(--orange)':'var(--green)'}">${ms.bcl}</div><div class="ms-lbl">Bulk Complaint Level (BCL)</div><div class="ms-explain">${esc(bclExplain(ms.bcl))}</div></div>`;
+    if(ms.pcl!==null)html+=`<div class="ms-item"><div class="ms-val">${ms.pcl}</div><div class="ms-lbl">Phishing Confidence Level (PCL)</div><div class="ms-explain">${ms.pcl>=3?'Phishing indicators detected':'No phishing indicators'}</div></div>`;
+    if(auth.compauth)html+=`<div class="ms-item"><div class="ms-val" style="color:${auth.compauth==='pass'?'var(--green)':'var(--red)'}">${auth.compauth}</div><div class="ms-lbl">Composite Auth</div><div class="ms-explain">${auth.compReason?'Reason code: '+auth.compReason:''}</div></div>`;
+    if(ms.netId)html+=`<div class="ms-item" style="grid-column:1/-1"><div class="ms-lbl">Network Message ID</div><div class="ms-explain mono">${esc(ms.netId)}</div></div>`;
+    html+=`</div>`;
+    if(ms.ffas){
+      html+=`<details style="margin-top:12px;"><summary style="font-size:12px;color:var(--blue);cursor:pointer;">Show X-Forefront-Antispam-Report details</summary>
+      <div class="hop-raw" style="display:block;margin-top:6px;">${esc(ms.ffas)}</div></details>`;
+    }
+    html+=`</div>`;
+  }
+
+  // ── ADDITIONAL HEADERS ────────────────────────────────────────────────────
+  if(extra.length){
+    const tooltips={
+      'x-originating-ip':'The IP address of the machine that originally submitted this message.',
+      'list-unsubscribe':'Provides a way to unsubscribe from a mailing list.',
+      'x-pm-message-id':'ProtonMail internal message identifier.',
+      'x-google-smtp-source':'Google internal SMTP routing identifier.',
+    };
+    let extraRows='';
+    for(const h of extra.slice(0,40)){
+      const tip=tooltips[h.name.toLowerCase()];
+      extraRows+=`<div style="display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start;">
+        <div style="color:var(--blue);font-family:'JetBrains Mono',monospace;min-width:200px;flex-shrink:0;word-break:break-all;">${esc(h.name)}${tip?`<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-popup">${esc(tip)}</span></span>`:''}</div>
+        <div style="color:var(--text-secondary);word-break:break-all;line-height:1.5;">${esc(h.value)}</div>
+      </div>`;
+    }
+    if(extra.length>40)extraRows+=`<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">…and ${extra.length-40} more</div>`;
+    html+=`<div class="card" style="padding:0;overflow:hidden;">
+      <div onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.xhdr-chev').classList.toggle('open')"
+           style="display:flex;align-items:center;gap:10px;padding:16px 20px;cursor:pointer;background:var(--bg-card);">
+        <div class="card-icon ci-cyan" style="flex-shrink:0;">🔬</div>
+        <div style="flex:1;">
+          <div class="card-title">Additional Headers</div>
+          <div class="card-desc">${extra.length} non-standard header${extra.length!==1?'s':''} — click to expand</div>
+        </div>
+        <span class="xhdr-chev" style="font-size:14px;color:var(--text-muted);transition:transform .2s;">▼</span>
+      </div>
+      <div class="xhdr-body" style="display:none;padding:0 20px 16px;">
+        <div style="display:flex;flex-direction:column;">${extraRows}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── SANITIZED SHARING ─────────────────────────────────────────────────────
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-purple">🧹</div><div><div class="card-title">Sanitized Sharing</div><div class="card-desc">Generate a redacted version safe for posting in support tickets or forums</div></div></div>
+  <div class="san-options">
+    <label class="san-opt"><input type="checkbox" id="san-emails" checked> Remove email addresses</label>
+    <label class="san-opt"><input type="checkbox" id="san-ips" checked> Remove IP addresses</label>
+    <label class="san-opt"><input type="checkbox" id="san-hosts"> Remove internal hostnames</label>
+    <label class="san-opt"><input type="checkbox" id="san-msgids" checked> Remove Message IDs</label>
+    <label class="san-opt"><input type="checkbox" id="san-tenant"> Remove tenant identifiers</label>
+  </div>
+  <button class="btn-primary" onclick="generateSanitized()">Generate Sanitized Output</button>
+  <div id="san-output" style="margin-top:12px;"></div>
+</div>`;
+
+  // ── RAW HEADERS ───────────────────────────────────────────────────────────
+  html+=`<div class="card">
+  <div class="card-hd"><div class="card-icon ci-cyan">📄</div><div><div class="card-title">Raw Headers</div><div class="card-desc">Full original headers — searchable and copyable</div></div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn-green" onclick="copyRaw()">Copy All</button>
+  </div>
+  </div>
+  <input class="raw-search" id="rawSearch" placeholder="Search headers…" oninput="filterRaw(this.value)">
+  <div class="raw-viewer" id="rawViewer">${syntaxHighlight(hdrs)}</div>
+</div>`;
+
+  html+=`<div class="warn-box" style="margin-top:8px;"><span>⚠</span><div><b>Note:</b> Headers added by servers the sender controls (the first few hops) can be forged. The most trustworthy headers are those added by servers you or your organization control — typically the last hops before delivery.</div></div>`;
+
+  // store raw for sanitize/search
+  window._lastRaw=raw;
+  window._lastHdrs=hdrs;
+
+  const res=document.getElementById('results');
+  res.innerHTML=html;
+  res.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function syntaxHighlight(hdrs){
+  return hdrs.map(h=>`<span class="hl-key">${esc(h.name)}:</span> <span class="hl-val">${esc(h.value)}</span>`).join('\n');
+}
+
+function filterRaw(q){
+  const el=document.getElementById('rawViewer');
+  if(!q){el.innerHTML=syntaxHighlight(window._lastHdrs);return;}
+  const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  el.innerHTML=syntaxHighlight(window._lastHdrs).replace(re,m=>`<span class="hl-match">${m}</span>`);
+}
+
+function copyRaw(){
+  if(!window._lastRaw)return;
+  navigator.clipboard.writeText(window._lastRaw).then(()=>{
+    const btn=event.target;const o=btn.textContent;btn.textContent='✓ Copied';setTimeout(()=>btn.textContent=o,1500);
+  });
+}
+
+function toggleAuthItem(hd){
+  const body=hd.nextElementSibling;
+  const chev=hd.querySelector('span:last-child');
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  if(chev)chev.textContent=open?'▲':'▼';
+}
+function toggleHop(i){
+  const det=document.getElementById('hd-'+i);
+  const chev=document.getElementById('chev-'+i);
+  const open=det.classList.toggle('open');
+  chev.classList.toggle('open',open);
+}
+function toggleRaw(i){
+  const el=document.getElementById('hr-'+i);
+  const tog=el.previousElementSibling;
+  const open=el.classList.toggle('open');
+  tog.textContent=(open?'▼ Hide':'▶ Show')+' raw Received header';
+}
+function expandAll(){
+  document.querySelectorAll('.hop-detail').forEach(d=>d.classList.add('open'));
+  document.querySelectorAll('.chevron').forEach(c=>c.classList.add('open'));
+}
+function collapseAll(){
+  document.querySelectorAll('.hop-detail').forEach(d=>d.classList.remove('open'));
+  document.querySelectorAll('.chevron').forEach(c=>c.classList.remove('open'));
+}
+
+function generateSanitized(){
+  let text=window._lastRaw||'';
+  if(document.getElementById('san-emails').checked)
+    text=text.replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,'[EMAIL]');
+  if(document.getElementById('san-ips').checked)
+    text=text.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,'[IP]');
+  if(document.getElementById('san-msgids').checked)
+    text=text.replace(/<[^@>]+@[^>]+>/g,'[MESSAGE-ID]');
+  if(document.getElementById('san-tenant').checked)
+    text=text.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi,'[TENANT-ID]');
+  if(document.getElementById('san-hosts').checked)
+    text=text.replace(/\b([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}\b/g,'[HOSTNAME]');
+  const out=document.getElementById('san-output');
+  out.innerHTML=`<div class="row" style="margin-bottom:8px;">
+    <span style="font-size:12px;color:var(--text-muted);">Sanitized output ready</span>
+    <div class="spacer"></div>
+    <button class="btn-green" onclick="navigator.clipboard.writeText(document.getElementById('san-text').textContent)">Copy</button>
+  </div>
+  <pre id="san-text" style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">${esc(text)}</pre>`;
+}
+
+function resetAll(){
+  document.getElementById('headerInput').value='';
+  document.getElementById('results').innerHTML='';
+}
+
+// ─── COMPARISON MODE ─────────────────────────────────────────────────────────
+function doCompare(){
+  const rawA=document.getElementById('cmpA').value.trim();
+  const rawB=document.getElementById('cmpB').value.trim();
+  if(!rawA||!rawB){document.getElementById('cmp-results').innerHTML='<div class="error-box">Paste headers into both fields to compare.</div>';return;}
+  const hA=parseHeaders(rawA),hB=parseHeaders(rawB);
+  const getF=(h,k)=>{const r=h.filter(x=>x.name.toLowerCase()===k);return r.length?r[0].value:null;};
+  const keys=['from','to','subject','date','message-id','received-spf'];
+  const authA=Object.assign({},...getAll(hA,'authentication-results').map(parseAuth));
+  const authB=Object.assign({},...getAll(hB,'authentication-results').map(parseAuth));
+  const hopA=getAll(hA,'received').map(parseReceived).reverse();
+  const hopB=getAll(hB,'received').map(parseReceived).reverse();
+  const msA=parseMSHeaders(hA),msB=parseMSHeaders(hB);
+
+  let html=`<div class="card"><div class="card-hd"><div class="card-icon ci-purple">⚖</div><div><div class="card-title">Header Comparison</div></div></div>`;
+  html+=`<div class="cmp-grid" style="margin-bottom:14px;">
+    <div><div class="cmp-lbl">Headers A</div></div>
+    <div><div class="cmp-lbl">Headers B</div></div>
+  </div>`;
+
+  // Key fields
+  html+=`<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Message Fields</div>`;
+  for(const k of keys){
+    const vA=getF(hA,k),vB=getF(hB,k);
+    const same=vA===vB;
+    html+=`<div class="diff-row">
+      <div class="diff-key">${esc(k)}</div>
+      <div class="diff-a ${same?'diff-same':'diff-changed'}">${esc(vA||'—')}</div>
+      <div class="diff-b ${same?'diff-same':'diff-changed'}">${esc(vB||'—')}</div>
+    </div>`;
+  }
+
+  // Auth
+  html+=`<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">Authentication</div>`;
+  for(const k of['spf','dkim','dmarc','compauth']){
+    const vA=authA[k],vB=authB[k];
+    if(!vA&&!vB)continue;
+    html+=`<div class="diff-row">
+      <div class="diff-key">${k.toUpperCase()}</div>
+      <div class="diff-a ${vA===vB?'diff-same':'diff-changed'}">${vA?authBadge('',vA):'—'}</div>
+      <div class="diff-b ${vA===vB?'diff-same':'diff-changed'}">${vB?authBadge('',vB):'—'}</div>
+    </div>`;
+  }
+
+  // Hops
+  html+=`<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">Routing (Received hops)</div>
+  <div class="diff-row"><div class="diff-key">Hop count</div><div class="diff-a ${hopA.length===hopB.length?'diff-same':'diff-changed'}">${hopA.length}</div><div class="diff-b ${hopA.length===hopB.length?'diff-same':'diff-changed'}">${hopB.length}</div></div>`;
+  const maxH=Math.max(hopA.length,hopB.length);
+  for(let i=0;i<maxH;i++){
+    const hA2=hopA[i],hB2=hopB[i];
+    const vA=hA2?(hA2.by||hA2.fromHost||'?'):'—';
+    const vB=hB2?(hB2.by||hB2.fromHost||'?'):'—';
+    html+=`<div class="diff-row">
+      <div class="diff-key">Hop ${i+1}</div>
+      <div class="diff-a ${vA===vB?'diff-same':'diff-changed'}">${esc(vA)}</div>
+      <div class="diff-b ${vA===vB?'diff-same':'diff-changed'}">${esc(vB)}</div>
+    </div>`;
+  }
+
+  // MS
+  if(msA.scl!==null||msB.scl!==null){
+    html+=`<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">Microsoft Verdicts</div>`;
+    for(const[k,la,lb] of[['scl',msA.scl,msB.scl],['bcl',msA.bcl,msB.bcl],['pcl',msA.pcl,msB.pcl]]){
+      if(la===null&&lb===null)continue;
+      html+=`<div class="diff-row"><div class="diff-key">${k.toUpperCase()}</div><div class="diff-a ${la===lb?'diff-same':'diff-changed'}">${la!==null?la:'—'}</div><div class="diff-b ${la===lb?'diff-same':'diff-changed'}">${lb!==null?lb:'—'}</div></div>`;
+    }
+  }
+  html+=`</div>`;
+  document.getElementById('cmp-results').innerHTML=html;
+  document.getElementById('cmp-results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</body>
+</html>
