@@ -215,15 +215,218 @@ textarea::placeholder{color:var(--text-muted);}
 .phase-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;}
 .phase-line{flex:1;height:1px;background:var(--border);}
 .phase-icon{font-size:13px;}
+
+/* ── REPORT MODAL ─────────────────────────────────────────────────────────── */
+.report-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;}
+.report-overlay.open{display:flex;}
+.report-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;width:520px;max-width:95vw;max-height:85vh;overflow-y:auto;padding:24px;}
+.report-modal h2{font-size:16px;font-weight:600;margin-bottom:6px;}
+.report-modal p{font-size:13px;color:var(--text-secondary);margin-bottom:18px;}
+.report-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}
+.report-type-btn{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;text-align:left;transition:all .15s;font-family:'DM Sans',sans-serif;}
+.report-type-btn:hover{border-color:var(--border-light);}
+.report-type-btn.selected{border-color:var(--blue);background:var(--blue-dim);}
+.report-type-btn .rt-name{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px;}
+.report-type-btn .rt-desc{font-size:11px;color:var(--text-muted);}
+.custom-checks{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;padding:14px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border);}
+.custom-checks label{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;}
+.custom-checks input[type=checkbox]{width:15px;height:15px;cursor:pointer;}
+.report-modal-footer{display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid var(--border);}
+
+/* ── PRINT STYLES ─────────────────────────────────────────────────────────── */
+@media print {
+  @page { margin: 15mm 15mm 20mm; size: A4; }
+
+  /* Force light theme for print */
+  body, body * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything except the print frame */
+  body > *:not(#print-frame) { display: none !important; }
+  #print-frame { display: block !important; }
+
+  /* Print frame base styles — light theme */
+  #print-frame {
+    font-family: 'DM Sans', sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* Report header */
+  .rpt-header { border-bottom: 2px solid #3b82f6; padding-bottom: 12px; margin-bottom: 20px; }
+  .rpt-header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; margin-bottom: 2px; }
+  .rpt-header .rpt-meta { font-size: 11px; color: #5a5a78; }
+
+  /* Section titles */
+  .rpt-section { margin-bottom: 20px; page-break-inside: avoid; }
+  .rpt-section-title { font-size: 13px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; border-bottom: 1px solid #d0d0e0; padding-bottom: 4px; }
+
+  /* Data grid */
+  .rpt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .rpt-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .rpt-item { background: #f5f5fa; border-radius: 6px; padding: 8px 10px; }
+  .rpt-item .lbl { font-size: 10px; color: #9090a8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+  .rpt-item .val { font-size: 12px; font-weight: 500; color: #1a1a2e; word-break: break-all; }
+  .rpt-item .val.mono { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+
+  /* Auth badges */
+  .rpt-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-right: 4px; }
+  .rpt-badge.pass { background: #dcfce7; color: #166534; }
+  .rpt-badge.fail { background: #fee2e2; color: #991b1b; }
+  .rpt-badge.soft { background: #fef9c3; color: #854d0e; }
+  .rpt-badge.none { background: #f1f5f9; color: #64748b; }
+
+  /* Finding box */
+  .rpt-finding { background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 12px; }
+  .rpt-finding .find-lbl { font-size: 10px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .rpt-finding .find-text { font-size: 12px; color: #1a1a2e; line-height: 1.5; }
+
+  /* Investigation point */
+  .rpt-invpoint { border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; }
+  .rpt-invpoint.clear { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .rpt-invpoint.info  { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .rpt-invpoint.warn  { background: #fffbeb; border: 1px solid #fde68a; }
+  .rpt-invpoint.critical { background: #fef2f2; border: 1px solid #fecaca; }
+  .rpt-invpoint .inv-target { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .rpt-invpoint.clear .inv-target { color: #166534; }
+  .rpt-invpoint.info  .inv-target { color: #1d4ed8; }
+  .rpt-invpoint.warn  .inv-target { color: #92400e; }
+  .rpt-invpoint.critical .inv-target { color: #991b1b; }
+  .rpt-invpoint .inv-reason { font-size: 12px; color: #374151; margin-bottom: 6px; }
+  .rpt-invpoint .inv-check { font-size: 11px; color: #374151; margin-bottom: 3px; }
+  .rpt-invpoint .inv-check::before { content: '• '; color: #3b82f6; font-weight: 700; }
+
+  /* Auth expand items */
+  .rpt-auth-item { border: 1px solid #d0d0e0; border-radius: 6px; margin-bottom: 6px; padding: 8px 12px; page-break-inside: avoid; }
+  .rpt-auth-item.pass { border-color: #bbf7d0; background: #f0fdf4; }
+  .rpt-auth-item.fail { border-color: #fecaca; background: #fef2f2; }
+  .rpt-auth-item.soft { border-color: #fde68a; background: #fffbeb; }
+  .rpt-auth-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .rpt-auth-name { font-size: 12px; font-weight: 700; min-width: 70px; }
+  .rpt-auth-full { font-size: 10px; color: #9090a8; }
+  .rpt-auth-headline { font-size: 11px; color: #374151; flex: 1; }
+  .rpt-auth-detail { font-size: 11px; color: #5a5a78; line-height: 1.5; }
+
+  /* Security grid */
+  .rpt-sec-item { background: #f5f5fa; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .rpt-sec-q { font-size: 11px; color: #5a5a78; margin-bottom: 3px; }
+  .rpt-sec-a { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .rpt-sec-a.good { color: #166534; }
+  .rpt-sec-a.bad  { color: #991b1b; }
+  .rpt-sec-a.warn { color: #92400e; }
+  .rpt-sec-note { font-size: 10px; color: #9090a8; line-height: 1.4; }
+
+  /* Phase headers */
+  .rpt-phase { margin-bottom: 10px; page-break-inside: avoid; }
+  .rpt-phase-hd { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .rpt-phase-lbl { font-size: 10px; font-weight: 700; color: #9090a8; text-transform: uppercase; letter-spacing: .6px; }
+  .rpt-phase-line { flex: 1; height: 1px; background: #d0d0e0; }
+  .rpt-phase-story { font-size: 11px; color: #5a5a78; font-style: italic; margin-bottom: 6px; padding-left: 20px; }
+
+  /* Hop cards */
+  .rpt-hop { border: 1px solid #d0d0e0; border-radius: 6px; padding: 8px 12px; margin-bottom: 4px; page-break-inside: avoid; }
+  .rpt-hop.crit { border-color: #fecaca; background: #fef2f2; }
+  .rpt-hop.warn { border-color: #fde68a; background: #fffbeb; }
+  .rpt-hop-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .rpt-hop-num { width: 20px; height: 20px; border-radius: 50%; background: #eff6ff; color: #1d4ed8; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rpt-hop-num.first { background: #f5f3ff; color: #6d28d9; }
+  .rpt-hop-num.last  { background: #f0fdf4; color: #166534; }
+  .rpt-hop-title { font-size: 12px; font-weight: 600; flex: 1; }
+  .rpt-hop-story { font-size: 10px; color: #5a5a78; font-style: italic; margin-bottom: 4px; padding-left: 28px; }
+  .rpt-hop-meta { font-size: 10px; color: #9090a8; padding-left: 28px; margin-bottom: 4px; }
+  .rpt-hop-pills { display: flex; gap: 4px; flex-wrap: wrap; padding-left: 28px; }
+  .rpt-pill { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
+  .rpt-pill.tls { background: #dcfce7; color: #166534; }
+  .rpt-pill.sys { background: #f5f3ff; color: #6d28d9; }
+  .rpt-pill.delay-fast   { background: #dcfce7; color: #166534; }
+  .rpt-pill.delay-minor  { background: #fef9c3; color: #854d0e; }
+  .rpt-pill.delay-warn   { background: #fff7ed; color: #9a3412; }
+  .rpt-pill.delay-crit   { background: #fee2e2; color: #991b1b; }
+  .rpt-pill.origin       { background: #f1f5f9; color: #64748b; }
+
+  /* Outcome box */
+  .rpt-outcome { border-radius: 6px; padding: 10px 14px; margin-top: 8px; }
+  .rpt-outcome.delivered  { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .rpt-outcome.failed     { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .rpt-outcome.incomplete { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .rpt-outcome .out-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+  .rpt-outcome .out-text  { font-size: 11px; }
+
+  /* MS analysis */
+  .rpt-ms-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+  .rpt-ms-item { background: #f5f5fa; border-radius: 6px; padding: 8px 10px; text-align: center; }
+  .rpt-ms-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+  .rpt-ms-lbl { font-size: 9px; color: #9090a8; text-transform: uppercase; letter-spacing: .4px; }
+  .rpt-ms-exp { font-size: 10px; color: #5a5a78; margin-top: 3px; }
+
+  /* Page number */
+  .rpt-footer { position: fixed; bottom: 8mm; left: 0; right: 0; text-align: center; font-size: 9px; color: #9090a8; }
+}
+.phase-header{display:flex;align-items:center;gap:8px;padding:8px 0 6px;margin-top:6px;}
+.phase-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;}
+.phase-line{flex:1;height:1px;background:var(--border);}
+.phase-icon{font-size:13px;}
 </style>
 </head>
 <body>
 <div class="topbar">
   <div class="topbar-title"><span>✉</span> Mail Flow Analyzer</div>
   <div class="topbar-actions">
+    <button class="btn-ghost" id="printBtn" onclick="openReportModal()" style="display:none;">🖨 Print Report</button>
     <button class="btn-ghost" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
   </div>
 </div>
+
+<!-- REPORT MODAL -->
+<div class="report-overlay" id="reportOverlay" onclick="if(event.target===this)closeReportModal()">
+  <div class="report-modal">
+    <h2>🖨 Print / Export Report</h2>
+    <p>Choose a report type or build a custom report. Output will be a light-theme PDF.</p>
+    <div class="report-type-grid">
+      <button class="report-type-btn selected" onclick="selectReportType('executive',this)">
+        <div class="rt-name">Executive Summary</div>
+        <div class="rt-desc">Key fields, auth status, finding, investigation point</div>
+      </button>
+      <button class="report-type-btn" onclick="selectReportType('full',this)">
+        <div class="rt-name">Full Detail</div>
+        <div class="rt-desc">All sections in order</div>
+      </button>
+      <button class="report-type-btn" onclick="selectReportType('security',this)">
+        <div class="rt-name">Security Analysis</div>
+        <div class="rt-desc">Auth summary, security analysis, Microsoft verdicts</div>
+      </button>
+      <button class="report-type-btn" onclick="selectReportType('journey',this)">
+        <div class="rt-name">Mail Journey</div>
+        <div class="rt-desc">Full phased hop timeline and delivery outcome</div>
+      </button>
+      <button class="report-type-btn" onclick="selectReportType('custom',this)" style="grid-column:1/-1;">
+        <div class="rt-name">Custom Report</div>
+        <div class="rt-desc">Select specific sections to include</div>
+      </button>
+    </div>
+    <div class="custom-checks" id="customChecks" style="display:none;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Include Sections</div>
+      <label><input type="checkbox" id="rpt-exec" checked> Executive Summary</label>
+      <label><input type="checkbox" id="rpt-invpoint" checked> Recommended Investigation Point</label>
+      <label><input type="checkbox" id="rpt-auth" checked> Authentication Summary</label>
+      <label><input type="checkbox" id="rpt-security" checked> Security Analysis</label>
+      <label><input type="checkbox" id="rpt-journey" checked> Message Journey</label>
+      <label><input type="checkbox" id="rpt-delivery" checked> Delivery Analysis</label>
+      <label><input type="checkbox" id="rpt-ms" checked> Microsoft-Specific Analysis</label>
+    </div>
+    <div class="report-modal-footer">
+      <button class="btn-secondary" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-primary" onclick="generateReport()">Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT FRAME — populated by generateReport(), only visible during print -->
+<div id="print-frame" style="display:none;"></div>
 <div class="wrap">
   <div class="mode-tabs">
     <button class="mode-tab active" onclick="showMode('single',this)">Single Analysis</button>
@@ -1637,6 +1840,76 @@ function decodeHeaders(){
   window._lastRaw=raw;
   window._lastHdrs=hdrs;
 
+  // ── CAPTURE REPORT DATA ─────────────────────────────────────────────────
+  // Build auth defs summary for report
+  const rptAuthDefs=[];
+  const authDefKeys=['spf','dkim','dmarc','arc','compauth'];
+  const authDefLabels={spf:'SPF',dkim:'DKIM',dmarc:'DMARC',arc:'ARC',compauth:'CompAuth'};
+  const authDefFull={spf:'Sender Policy Framework',dkim:'DomainKeys Identified Mail',dmarc:'Domain-based Message Authentication',arc:'Authenticated Received Chain',compauth:'Microsoft Composite Authentication'};
+  for(const key of authDefKeys){
+    const v=effectiveAuth[key];
+    if(!v&&(key==='arc'||key==='compauth'))continue;
+    const c=authClass(v||'none');
+    const cls=c==='pass'?'pass':c==='fail'?'fail':c==='soft'?'soft':'none';
+    // headline from the authDefs already rendered — derive a simple one
+    const headlines={pass:'Passed',fail:'Failed',softfail:'Soft fail',none:'Not evaluated',neutral:'Neutral',present:'Present'};
+    rptAuthDefs.push({
+      label:authDefLabels[key],fullName:authDefFull[key],
+      statusCls:cls,badgeText:(authIcon(v||'none')+' '+(v||'none')).trim(),
+      headline:headlines[v||'none']||v||'none',
+      detail:''  // expanded detail omitted from report for brevity
+    });
+  }
+  // Security items for report
+  const rptTlsHops=hops.filter(h=>h.tls||/TLS|ESMTPS/i.test(h.with||'')).length;
+  const rptNoTlsHops=hops.filter(h=>!h.tls&&h.with&&/^SMTP$/i.test(h.with)).length;
+  const rptSecItems=[
+    {q:'Is the sender authorized?',
+     a:effectiveAuth.spf==='pass'?'✓ Yes — SPF passed':effectiveAuth.spf==='softfail'?'~ Possibly — SPF softfail':effectiveAuth.spf==='fail'?'✗ No — SPF hard fail':'? SPF: '+(effectiveAuth.spf||'not checked'),
+     good:effectiveAuth.spf==='pass',bad:effectiveAuth.spf==='fail',warn:effectiveAuth.spf==='softfail',
+     note:effectiveAuth.spf==='pass'?senderDomain+' DNS records authorize the sending server.':(effectiveAuth.spf==='softfail'?'Domain uses ~all soft fail policy.':'')},
+    {q:'Was the connection encrypted (TLS)?',
+     a:rptTlsHops>0?'✓ Yes — '+rptTlsHops+' of '+hops.length+' hops used TLS':rptNoTlsHops>0?'✗ Some hops used plain SMTP':'? Not detected',
+     good:rptTlsHops>0,bad:rptNoTlsHops>0&&rptTlsHops===0,warn:false,note:''},
+    {q:'Did DMARC policy pass?',
+     a:effectiveAuth.dmarc==='pass'?'✓ Yes — aligned with '+senderDomain:effectiveAuth.dmarc==='fail'?'✗ No — failed '+senderDomain+' policy':'? '+(effectiveAuth.dmarc||'Not evaluated'),
+     good:effectiveAuth.dmarc==='pass',bad:effectiveAuth.dmarc==='fail',warn:false,note:''},
+    {q:'Was the message signed (DKIM)?',
+     a:effectiveAuth.dkim==='pass'?'✓ Valid — signed by '+senderDomain:effectiveAuth.dkim==='fail'?'✗ Invalid or missing':'? '+(effectiveAuth.dkim||'Not signed'),
+     good:effectiveAuth.dkim==='pass',bad:effectiveAuth.dkim==='fail',warn:false,note:''},
+  ];
+  if(hops[0]&&hops[0].ip)rptSecItems.push({q:'Originating IP',a:hops[0].ip,good:false,bad:false,warn:false,note:''});
+  if(hops[0]&&hops[0].fromHost)rptSecItems.push({q:'Sending Server Hostname (HELO)',a:hops[0].fromHost,good:false,bad:false,warn:false,note:''});
+
+  // Phase groups for report (reuse same grouping logic result)
+  const rptPhaseGroups=phaseGroups.map(pg=>{
+    const meta=PHASE_META[pg.phase]||{label:pg.phase,icon:'📧'};
+    return{phase:pg.phase,label:meta.label,icon:meta.icon,hops:pg.hops};
+  });
+
+  window._reportData={
+    from,to,subject,
+    dateLocal:(()=>{try{const d=new Date(date);return isNaN(d)?date:d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});}catch(e){return date;}})(),
+    totalDelayStr:totalDelay!==null?delayLabel(totalDelay):'Unknown',
+    maxDelayStr:maxDelay>0?delayLabel(maxDelay):'None',
+    hopCount:hops.length,
+    mailProvider,isHybrid,
+    gwDetected:gatewayMode,gwName,
+    mailer,
+    effectiveAuth,
+    findingText:finding.text,
+    invPoint,
+    senderDomain,
+    authDefs:rptAuthDefs,
+    secItems:rptSecItems,
+    phaseGroups:rptPhaseGroups,
+    storyByHop,storyByPhase,storyOutcome,
+    deliveryMode:deliveryClass.mode,
+    hopsWithPct,totalDelay,
+    ms,
+  };
+  document.getElementById('printBtn').style.display='flex';
+
   const res=document.getElementById('results');
   res.innerHTML=html;
   res.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1784,6 +2057,242 @@ function doCompare(){
   html+=`</div>`;
   document.getElementById('cmp-results').innerHTML=html;
   document.getElementById('cmp-results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ─── REPORT MODAL ─────────────────────────────────────────────────────────────
+let _selectedReportType='executive';
+
+function openReportModal(){
+  document.getElementById('reportOverlay').classList.add('open');
+}
+function closeReportModal(){
+  document.getElementById('reportOverlay').classList.remove('open');
+}
+function selectReportType(type,btn){
+  _selectedReportType=type;
+  document.querySelectorAll('.report-type-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('customChecks').style.display=type==='custom'?'flex':'none';
+  if(type==='custom')document.getElementById('customChecks').style.flexDirection='column';
+}
+
+// Section inclusion map per report type
+function getSections(type){
+  if(type==='executive')  return{exec:true,invpoint:true,auth:false,security:false,journey:false,delivery:false,ms:false};
+  if(type==='full')       return{exec:true,invpoint:true,auth:true,security:true,journey:true,delivery:true,ms:true};
+  if(type==='security')   return{exec:false,invpoint:false,auth:true,security:true,journey:false,delivery:false,ms:true};
+  if(type==='journey')    return{exec:false,invpoint:false,auth:false,security:false,journey:true,delivery:true,ms:false};
+  if(type==='custom')     return{
+    exec:   document.getElementById('rpt-exec').checked,
+    invpoint:document.getElementById('rpt-invpoint').checked,
+    auth:   document.getElementById('rpt-auth').checked,
+    security:document.getElementById('rpt-security').checked,
+    journey: document.getElementById('rpt-journey').checked,
+    delivery:document.getElementById('rpt-delivery').checked,
+    ms:      document.getElementById('rpt-ms').checked,
+  };
+  return{exec:true,invpoint:true,auth:true,security:true,journey:true,delivery:true,ms:true};
+}
+
+function generateReport(){
+  const sections=getSections(_selectedReportType);
+  const d=window._reportData;
+  if(!d){closeReportModal();return;}
+
+  const typeLabels={executive:'Executive Summary',full:'Full Detail',security:'Security Analysis',journey:'Mail Journey',custom:'Custom Report'};
+  const now=new Date().toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
+
+  let html=`<div class="rpt-header">
+    <h1>Mail Flow Analyzer — ${typeLabels[_selectedReportType]||'Report'}</h1>
+    <div class="rpt-meta">Generated ${now} &nbsp;·&nbsp; Subject: ${esc(d.subject)} &nbsp;·&nbsp; From: ${esc(d.from)}</div>
+  </div>`;
+
+  // ── EXECUTIVE SUMMARY ──────────────────────────────────────────────────────
+  if(sections.exec){
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Executive Summary</div>
+    <div class="rpt-grid">
+      <div class="rpt-item"><div class="lbl">From (Sender)</div><div class="val">${esc(d.from)}</div></div>
+      <div class="rpt-item"><div class="lbl">To (Recipient)</div><div class="val">${esc(d.to)}</div></div>
+    </div>
+    <div class="rpt-grid">
+      <div class="rpt-item"><div class="lbl">Subject</div><div class="val">${esc(d.subject)}</div></div>
+      <div class="rpt-item"><div class="lbl">Date Sent</div><div class="val">${esc(d.dateLocal)}</div></div>
+    </div>
+    <div class="rpt-grid rpt-grid-3">
+      <div class="rpt-item"><div class="lbl">Delivery Time</div><div class="val">${esc(d.totalDelayStr)}</div></div>
+      <div class="rpt-item"><div class="lbl">Hops</div><div class="val">${d.hopCount}</div></div>
+      <div class="rpt-item"><div class="lbl">Largest Delay</div><div class="val">${esc(d.maxDelayStr)}</div></div>
+      <div class="rpt-item"><div class="lbl">Detected Mail Provider</div><div class="val">${esc(d.mailProvider)}${d.isHybrid?' (Hybrid)':''}</div></div>
+      <div class="rpt-item"><div class="lbl">Third-Party Gateway</div><div class="val">${d.gwDetected?esc(d.gwName):'None detected'}</div></div>
+      ${d.mailer?`<div class="rpt-item"><div class="lbl">Mail Client</div><div class="val">${esc(d.mailer)}</div></div>`:''}
+    </div>
+    <div class="rpt-item" style="margin-bottom:10px;">
+      <div class="lbl">Authentication (${d.gwDetected?'gateway-verified':'as reported'})</div>
+      <div class="val" style="margin-top:4px;">
+        ${rptAuthBadge('SPF',d.effectiveAuth.spf)}
+        ${rptAuthBadge('DKIM',d.effectiveAuth.dkim)}
+        ${rptAuthBadge('DMARC',d.effectiveAuth.dmarc)}
+        ${d.effectiveAuth.compauth?rptAuthBadge('CompAuth',d.effectiveAuth.compauth):''}
+      </div>
+    </div>
+    <div class="rpt-finding">
+      <div class="find-lbl">🔍 Most Likely Finding</div>
+      <div class="find-text">${esc(d.findingText)}</div>
+    </div>
+  </div>`;
+  }
+
+  // ── INVESTIGATION POINT ────────────────────────────────────────────────────
+  if(sections.invpoint&&d.invPoint){
+    const ip=d.invPoint;
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Recommended Investigation Point</div>
+    <div class="rpt-invpoint ${ip.urgency}">
+      <div class="inv-target">${esc(ip.target)}</div>
+      <div class="inv-reason">${esc(ip.reason)}</div>
+      ${ip.checks.map(c=>`<div class="inv-check">${esc(c)}</div>`).join('')}
+    </div>
+  </div>`;
+  }
+
+  // ── AUTH SUMMARY ───────────────────────────────────────────────────────────
+  if(sections.auth&&d.authDefs){
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Authentication Summary</div>
+    <div style="font-size:11px;color:#5a5a78;margin-bottom:8px;">Checks verify the sender's domain (${esc(d.senderDomain)})${d.gwDetected?' — results reflect '+esc(d.gwName)+' gateway verification':''}</div>`;
+    for(const ad of d.authDefs){
+      const cls=ad.statusCls;
+      html+=`<div class="rpt-auth-item ${cls}">
+        <div class="rpt-auth-row">
+          <span class="rpt-auth-name">${esc(ad.label)}</span>
+          <span class="rpt-auth-full">${esc(ad.fullName)}</span>
+          <span class="rpt-auth-headline">${esc(ad.headline)}</span>
+          <span class="rpt-badge ${cls}">${esc(ad.badgeText)}</span>
+        </div>
+        <div class="rpt-auth-detail">${esc(ad.detail)}</div>
+      </div>`;
+    }
+    html+=`</div>`;
+  }
+
+  // ── SECURITY ANALYSIS ──────────────────────────────────────────────────────
+  if(sections.security&&d.secItems){
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Security Analysis</div>
+    <div class="rpt-grid">`;
+    for(const si of d.secItems){
+      const cls=si.good?'good':si.bad?'bad':si.warn?'warn':'';
+      html+=`<div class="rpt-sec-item">
+        <div class="rpt-sec-q">${esc(si.q)}</div>
+        <div class="rpt-sec-a ${cls}">${esc(si.a)}</div>
+        ${si.note?`<div class="rpt-sec-note">${esc(si.note)}</div>`:''}
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+
+  // ── MESSAGE JOURNEY ────────────────────────────────────────────────────────
+  if(sections.journey&&d.phaseGroups){
+    const deliveryModeLabel={completed:'Delivered',bounced:'Bounced / NDR',rejected:'Rejected',deferred:'Deferred',incomplete:'Incomplete'};
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Message Journey — ${d.hopCount} Hop${d.hopCount!==1?'s':''} &nbsp; <span style="font-size:10px;font-weight:400;color:#64748b;">${deliveryModeLabel[d.deliveryMode]||d.deliveryMode}</span></div>`;
+    let ghi=0;
+    for(const pg of d.phaseGroups){
+      const phaseStory=d.storyByPhase[pg.phase]||[];
+      html+=`<div class="rpt-phase">
+        <div class="rpt-phase-hd"><span style="font-size:12px;">${pg.icon}</span><span class="rpt-phase-lbl">${esc(pg.label)}</span><div class="rpt-phase-line"></div><span style="font-size:9px;color:#9090a8;">${pg.hops.length} hop${pg.hops.length!==1?'s':''}</span></div>
+        ${phaseStory.map(t=>`<div class="rpt-phase-story">${t}</div>`).join('')}`;
+      for(const hop of pg.hops){
+        const hi=ghi++;
+        const isFirst=hi===0,isLast=hi===d.hopCount-1;
+        const numCls=isFirst?'first':isLast?'last':'';
+        const dc=hop.delay!==null?delayClass(hop.delay):'none';
+        const hcls=(hop.delay&&hop.delay>600000)?'crit':(hop.delay&&hop.delay>60000)?'warn':'';
+        const hopStory=d.storyByHop[hi]||'';
+        const hasTLS=hop.tls||/TLS|ESMTPS/i.test(hop.with||'');
+        html+=`<div class="rpt-hop ${hcls}">
+          <div class="rpt-hop-hd">
+            <div class="rpt-hop-num ${numCls}">${isFirst?'⊙':isLast?'✓':(hi+1)}</div>
+            <div class="rpt-hop-title">${esc(hop.desc)}</div>
+          </div>
+          ${hopStory?`<div class="rpt-hop-story">${hopStory}</div>`:''}
+          ${hop.date&&!isNaN(hop.date)?`<div class="rpt-hop-meta">🕐 ${hop.date.toUTCString()}</div>`:''}
+          <div class="rpt-hop-pills">
+            ${hop.sys?`<span class="rpt-pill sys">🏷 ${esc(hop.sys.name)}</span>`:''}
+            ${hasTLS?'<span class="rpt-pill tls">🔒 TLS</span>':''}
+            ${hop.delay!==null?`<span class="rpt-pill delay-${dc}">+${delayLabel(hop.delay)}${hop.pct!=null&&hop.pct>=5?' / '+hop.pct+'%':''}</span>`:'<span class="rpt-pill origin">Origin</span>'}
+          </div>
+        </div>`;
+      }
+      html+=`</div>`;
+    }
+    // Outcome
+    if(d.storyOutcome&&d.storyOutcome.length){
+      const oc=d.deliveryMode==='completed'?'delivered':d.deliveryMode==='bounced'||d.deliveryMode==='rejected'?'failed':'incomplete';
+      html+=`<div class="rpt-phase"><div class="rpt-phase-hd"><span style="font-size:12px;">${oc==='delivered'?'✅':'🚨'}</span><span class="rpt-phase-lbl">Delivery Outcome</span><div class="rpt-phase-line"></div></div>
+      <div class="rpt-outcome ${oc}">
+        ${d.storyOutcome.map((s,i)=>`<div class="${i===0?'out-title':'out-text'}">${s.text}</div>`).join('')}
+      </div></div>`;
+    }
+    html+=`</div>`;
+  }
+
+  // ── DELIVERY ANALYSIS ──────────────────────────────────────────────────────
+  if(sections.delivery&&d.hopsWithPct&&d.totalDelay!==null){
+    const avgDelay=d.hopsWithPct.slice(1).filter(h=>h.delay!==null).reduce((a,h)=>a+h.delay,0)/
+      (d.hopsWithPct.slice(1).filter(h=>h.delay!==null).length||1);
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Delivery Analysis</div>
+    <div class="rpt-grid rpt-grid-3">
+      <div class="rpt-item"><div class="lbl">Total Delivery Time</div><div class="val">${esc(d.totalDelayStr)}</div></div>
+      <div class="rpt-item"><div class="lbl">Number of Hops</div><div class="val">${d.hopCount}</div></div>
+      <div class="rpt-item"><div class="lbl">Average Hop Delay</div><div class="val">${isNaN(avgDelay)?'—':delayLabel(avgDelay)}</div></div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="text-align:left;padding:5px 8px;color:#64748b;font-weight:600;">Hop</th>
+        <th style="text-align:left;padding:5px 8px;color:#64748b;font-weight:600;">System</th>
+        <th style="text-align:right;padding:5px 8px;color:#64748b;font-weight:600;">Delay</th>
+        <th style="text-align:right;padding:5px 8px;color:#64748b;font-weight:600;">% of Transit</th>
+      </tr></thead>
+      <tbody>
+        ${d.hopsWithPct.map((h,i)=>{
+          if(i===0)return`<tr><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;">${i+1}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#374151;">${esc(h.sys?h.sys.name:h.by||'—')}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:right;color:#9090a8;">Origin</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">—</td></tr>`;
+          const dc=h.delay!==null?delayClass(h.delay):'none';
+          const clr=dc==='crit'?'#991b1b':dc==='warn'?'#9a3412':dc==='minor'?'#854d0e':'#166534';
+          return`<tr><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;">${i+1}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#374151;">${esc(h.sys?h.sys.name:h.by||'—')}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:right;color:${clr};font-weight:600;">${h.delay!==null?'+'+delayLabel(h.delay):'—'}</td><td style="padding:4px 8px;border-bottom:1px solid #e2e8f0;text-align:right;color:${clr};">${h.pct!=null?h.pct+'%':'—'}</td></tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+  }
+
+  // ── MICROSOFT ANALYSIS ─────────────────────────────────────────────────────
+  if(sections.ms&&d.ms&&(d.ms.scl!==null||d.ms.bcl!==null||d.ms.pcl!==null)){
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Microsoft-Specific Analysis</div>
+    <div class="rpt-ms-grid">`;
+    if(d.ms.scl!==null){const c=d.ms.scl>=5?'#991b1b':d.ms.scl>=1?'#9a3412':'#166534';html+=`<div class="rpt-ms-item"><div class="rpt-ms-val" style="color:${c};">${d.ms.scl}</div><div class="rpt-ms-lbl">Spam Confidence (SCL)</div><div class="rpt-ms-exp">${esc(sclExplain(d.ms.scl))}</div></div>`;}
+    if(d.ms.bcl!==null){const c=d.ms.bcl>=7?'#991b1b':d.ms.bcl>=4?'#9a3412':'#166534';html+=`<div class="rpt-ms-item"><div class="rpt-ms-val" style="color:${c};">${d.ms.bcl}</div><div class="rpt-ms-lbl">Bulk Complaint (BCL)</div><div class="rpt-ms-exp">${esc(bclExplain(d.ms.bcl))}</div></div>`;}
+    if(d.ms.pcl!==null){html+=`<div class="rpt-ms-item"><div class="rpt-ms-val">${d.ms.pcl}</div><div class="rpt-ms-lbl">Phishing Level (PCL)</div><div class="rpt-ms-exp">${d.ms.pcl>=3?'Phishing indicators detected':'No phishing indicators'}</div></div>`;}
+    html+=`</div>`;
+    if(d.ms.netId)html+=`<div class="rpt-item"><div class="lbl">Network Message ID</div><div class="val mono">${esc(d.ms.netId)}</div></div>`;
+    html+=`</div>`;
+  }
+
+  html+=`<div class="rpt-footer">Mail Flow Analyzer &nbsp;·&nbsp; ${now} &nbsp;·&nbsp; Page <span class="pageNumber"></span></div>`;
+
+  document.getElementById('print-frame').innerHTML=html;
+  closeReportModal();
+  setTimeout(()=>window.print(),100);
+}
+
+function rptAuthBadge(label,val){
+  if(!val)return'';
+  const c=authClass(val);
+  const cls=c==='pass'?'pass':c==='fail'?'fail':c==='soft'?'soft':'none';
+  return`<span class="rpt-badge ${cls}">${authIcon(val)} ${label}: ${esc(val)}</span> `;
 }
 </script>
 </body>
