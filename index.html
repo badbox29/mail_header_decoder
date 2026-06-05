@@ -788,59 +788,81 @@ function isHybridRouting(hops){
 }
 
 // ─── MAIL FLOW STORY ─────────────────────────────────────────────────────────
+// Returns structured objects for distributed rendering:
+//   {type:'timing', text}          → journey-level header line
+//   {type:'hop', hopIndex, text}   → inline callout on a specific hop card
+//   {type:'phase', phase, text}    → subtitle on a phase header
+//   {type:'outcome', text}         → Delivery Outcome phase at journey bottom
 function generateMailFlowStory(hops,auth,effectiveAuth,aOrig,gatewayMode,gwName,deliveryClass,totalDelay,from,to,mailer){
-  const sentences=[];
+  const items=[];
   const firstHop=hops[0];
   const sentTime=firstHop&&firstHop.date&&!isNaN(firstHop.date)?
     firstHop.date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:true}):null;
 
-  if(mailer&&sentTime)sentences.push('The message was composed in '+esc(mailer)+' and submitted at '+sentTime+'.');
-  else if(sentTime)sentences.push('The message was submitted by the sender at '+sentTime+'.');
-  else sentences.push('The message was submitted by '+esc(from||'the sender')+'.');
+  // Timing summary → journey header
+  if(totalDelay!==null){
+    if(totalDelay<10000)items.push({type:'timing',text:'Total transit time: '+delayLabel(totalDelay)+' — well within normal range.'});
+    else if(totalDelay<120000)items.push({type:'timing',text:'Total transit time: '+delayLabel(totalDelay)+'.'});
+    else items.push({type:'timing',text:'Total transit time: '+delayLabel(totalDelay)+' — above normal. See investigation point below.'});
+  }
 
+  // Hop-level sentences
   for(let i=0;i<hops.length;i++){
     const hop=hops[i];
     const sys=hop.sys;
     const name=sys?sys.name:(hop.by||'an unknown server');
     const tls=hop.tls||/TLS|ESMTPS/i.test(hop.with||'');
     const enc=tls?' over an encrypted (TLS) connection':'';
+
     if(i===0){
-      sentences.push('The sending server ('+esc(hop.by||hop.fromHost||'unknown')+') accepted the message for delivery.');
+      const sub=mailer&&sentTime?'Composed in '+esc(mailer)+', submitted at '+sentTime+'.':
+        sentTime?'Submitted at '+sentTime+' by '+esc(from||'the sender')+'.':
+        'Submitted by '+esc(from||'the sender')+'.';
+      items.push({type:'hop',hopIndex:i,text:sub});
       continue;
     }
     if(i===hops.length-1){
-      if(deliveryClass.mode==='completed')sentences.push('The message was delivered to the recipient mailbox via '+esc(name)+enc+'.');
-      else if(deliveryClass.mode==='bounced'||deliveryClass.mode==='rejected')sentences.push('The message reached '+esc(name)+' but was rejected'+(deliveryClass.ndrStatus?' (status: '+esc(deliveryClass.ndrStatus)+')':'')+'.');
-      else sentences.push('The last recorded hop was '+esc(name)+'. No further header data is available — the message may have been queued, rejected, or delivered silently at this point.');
+      if(deliveryClass.mode==='completed')
+        items.push({type:'hop',hopIndex:i,text:'Message delivered to recipient mailbox via '+esc(name)+enc+'.'});
+      else if(deliveryClass.mode==='bounced'||deliveryClass.mode==='rejected')
+        items.push({type:'hop',hopIndex:i,text:'Message reached '+esc(name)+' and was rejected'+(deliveryClass.ndrStatus?' ('+esc(deliveryClass.ndrStatus)+')':'')+'.'});
+      else
+        items.push({type:'hop',hopIndex:i,text:'Last recorded hop. No further data available — message may have been queued, rejected, or delivered silently.'});
       continue;
     }
     if(sys&&sys.type==='gateway'){
-      const gwAuth=(gatewayMode&&aOrig&&aOrig.spf==='pass'&&aOrig.dkim==='pass')?' '+esc(name)+' verified SPF, DKIM, and DMARC successfully.':'';
-      sentences.push('The message was received and scanned by '+esc(name)+enc+'.'+gwAuth);
+      const gwAuth=(gatewayMode&&aOrig&&aOrig.spf==='pass'&&aOrig.dkim==='pass')?' SPF, DKIM, and DMARC verified successfully.':'';
+      items.push({type:'hop',hopIndex:i,text:'Message received and scanned'+enc+'.'+gwAuth});
     } else {
-      sentences.push('The message was forwarded to '+esc(name)+enc+'.');
+      items.push({type:'hop',hopIndex:i,text:'Message forwarded'+enc+'.'});
     }
   }
 
-  if(effectiveAuth.spf==='pass'&&effectiveAuth.dkim==='pass'&&effectiveAuth.dmarc==='pass'){
-    sentences.push('All authentication checks (SPF, DKIM, DMARC) passed'+(gatewayMode?' at the gateway level':'')+', confirming the message is from a legitimate source.');
-  } else if(gatewayMode&&aOrig&&aOrig.spf==='pass'){
-    sentences.push('Authentication was validated by '+esc(gwName)+'. Failures recorded at the final mail server are expected artifacts of gateway forwarding, not spoofing indicators.');
+  // Phase-level auth annotation → gateway phase
+  if(gatewayMode&&aOrig&&aOrig.spf==='pass'){
+    items.push({type:'phase',phase:'gateway',text:'Authentication (SPF, DKIM, DMARC) verified by '+esc(gwName)+'. Failures at the boundary server are expected gateway forwarding artifacts.'});
+  } else if(effectiveAuth.spf==='pass'&&effectiveAuth.dkim==='pass'&&effectiveAuth.dmarc==='pass'){
+    items.push({type:'phase',phase:'cloud-filtering',text:'All authentication checks passed — message confirmed as legitimate.'});
   } else {
     const failed=[effectiveAuth.spf!=='pass'?'SPF':'',effectiveAuth.dkim!=='pass'&&effectiveAuth.dkim!=='present'?'DKIM':'',effectiveAuth.dmarc!=='pass'?'DMARC':''].filter(Boolean);
-    if(failed.length)sentences.push(failed.join(' and ')+' check'+(failed.length>1?'s':'')+' failed — the sender\'s domain authentication configuration should be reviewed.');
+    if(failed.length)items.push({type:'phase',phase:'cloud-filtering',text:failed.join(' and ')+' check'+(failed.length>1?'s':'')+' failed. Review sender domain configuration.'});
   }
 
-  if(totalDelay!==null){
-    if(totalDelay<10000)sentences.push('Total transit time was '+delayLabel(totalDelay)+' — well within normal range.');
-    else if(totalDelay<120000)sentences.push('Total transit time was '+delayLabel(totalDelay)+'.');
-    else sentences.push('Total transit time was '+delayLabel(totalDelay)+', which is above normal and warrants investigation.');
+  // Outcome sentences → outcome phase
+  if(deliveryClass.mode==='completed'){
+    items.push({type:'outcome',text:'Delivery completed successfully.'});
+  } else if(deliveryClass.mode==='bounced'){
+    items.push({type:'outcome',text:'Delivery failed — message bounced. The message did not reach the intended recipient.'});
+    if(deliveryClass.ndrDiagnostic)items.push({type:'outcome',text:'Diagnostic: '+esc(deliveryClass.ndrDiagnostic)});
+  } else if(deliveryClass.mode==='rejected'){
+    items.push({type:'outcome',text:'Delivery failed — message rejected at the boundary. No further hops were recorded.'});
+  } else if(deliveryClass.mode==='deferred'){
+    items.push({type:'outcome',text:'Delivery was deferred (temporary failure). The sending server may retry.'});
+  } else if(deliveryClass.mode==='incomplete'){
+    items.push({type:'outcome',text:'These headers are incomplete. The full delivery path is not visible. Investigate at the last recorded system.'});
   }
 
-  if(deliveryClass.mode==='bounced')sentences.push('These headers represent a failed delivery. The message did not reach the intended recipient.');
-  else if(deliveryClass.mode==='incomplete')sentences.push('These headers appear incomplete. The full delivery path may not be visible from the data provided.');
-
-  return sentences;
+  return items;
 }
 
 // ─── INVESTIGATION POINT ─────────────────────────────────────────────────────
@@ -1095,20 +1117,6 @@ function decodeHeaders(){
   </div>
 </div>`;
 
-  // ── 1b. MAIL FLOW STORY ───────────────────────────────────────────────────
-  const deliveryModeBadgeCls={completed:'b-pass',bounced:'b-fail',rejected:'b-fail',deferred:'b-soft',incomplete:'b-soft'};
-  const deliveryModeLabel={completed:'Delivered',bounced:'Bounced / NDR',rejected:'Rejected',deferred:'Deferred',incomplete:'Incomplete'};
-  html+=`<div class="card">
-  <div class="card-hd">
-    <div class="card-icon ci-cyan">📖</div>
-    <div style="flex:1;"><div class="card-title">Mail Flow Story</div><div class="card-desc">What happened, in plain English</div></div>
-    <span class="badge ${deliveryModeBadgeCls[deliveryClass.mode]||'b-none'}" style="font-size:12px;">${deliveryModeLabel[deliveryClass.mode]||deliveryClass.mode}</span>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:8px;">
-    ${story.map((s,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:20px;height:20px;border-radius:50%;background:var(--blue-dim);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">'+(i+1)+'</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">'+s+'</div></div>').join('')}
-  </div>
-</div>`;
-
   // ── 1c. RECOMMENDED INVESTIGATION POINT ──────────────────────────────────
   const urgencyMap={
     clear:   {border:'rgba(34,197,94,.25)',  headerBg:'var(--green-dim)',   icon:'✅', iconCls:'ci-green',  titleColor:'var(--green)',  chevColor:'var(--green)',  startOpen:false},
@@ -1277,58 +1285,54 @@ function decodeHeaders(){
   html+=`</div>`;
 
   // ── 3. MESSAGE JOURNEY TIMELINE ───────────────────────────────────────────
+  // Build lookup maps from story items
+  const storyByHop={};
+  const storyByPhase={};
+  const storyTiming=story.find(s=>s.type==='timing');
+  const storyOutcome=story.filter(s=>s.type==='outcome');
+  for(const s of story){
+    if(s.type==='hop')storyByHop[s.hopIndex]=s.text;
+    if(s.type==='phase'){storyByPhase[s.phase]=storyByPhase[s.phase]||[];storyByPhase[s.phase].push(s.text);}
+  }
+
   // Assign each hop to a logical phase
   function assignPhase(hop, i, allHops){
     const sys=hop.sys;
     const isFirst=i===0;
     const isLast=i===allHops.length-1;
     const by=hop.by||'';
-    const fromH=hop.fromHost||'';
-
     if(isFirst) return 'external-sending';
-
-    // Gateway phase: hop IS at a recognized gateway system
     if(sys&&sys.type==='gateway') return 'gateway';
-
-    // Cloud platform final delivery
     if(sys&&sys.type==='cloud'){
-      // EOP is filtering, not yet mailbox
       if(sys.name.includes('Exchange Online Protection')) return 'cloud-filtering';
-      // On final hop, it's mailbox delivery
       if(isLast) return 'mailbox-delivery';
       return 'cloud-filtering';
     }
-
-    // On-prem Exchange after cloud hops = internal routing
     const prevHasCloud=allHops.slice(0,i).some(h=>h.sys&&h.sys.type==='cloud');
     const prevHasGateway=allHops.slice(0,i).some(h=>h.sys&&h.sys.type==='gateway');
     const isOnPrem=!sys&&!/outlook\.com|office365|prod\.outlook|protection\.outlook|google\.com|pphosted|mimecast/i.test(by);
     if(prevHasCloud&&isOnPrem) return 'internal-routing';
-
-    // Hops between origin and first gateway/cloud = public routing
     if(!prevHasGateway&&!prevHasCloud) return 'public-routing';
-
-    // Hops between gateway and cloud = internal handoff
     if(prevHasGateway&&!prevHasCloud) return 'internal-handoff';
-
     if(isLast) return 'mailbox-delivery';
     return 'public-routing';
   }
 
   const PHASE_META={
-    'external-sending':  {label:'External Sending',           icon:'📤', desc:'Origin — message submitted by sender'},
-    'public-routing':    {label:'Public Routing',             icon:'🌐', desc:'Message traversing public internet infrastructure'},
-    'gateway':           {label:'Third-Party Mail Gateway',   icon:'🛡', desc:'Message processed by security gateway'},
-    'internal-handoff':  {label:'Internal Hand-off',          icon:'🔀', desc:'Gateway forwarding to destination mail platform'},
-    'cloud-filtering':   {label:'Cloud Mail Filtering',       icon:'☁', desc:'Cloud mail platform — anti-spam and policy checks'},
-    'mailbox-delivery':  {label:'Mailbox Delivery',           icon:'📬', desc:'Final delivery to recipient mailbox'},
-    'internal-routing':  {label:'Internal Routing',           icon:'🏢', desc:'Internal mail routing to on-premises mailbox'},
+    'external-sending':  {label:'External Sending',          icon:'📤'},
+    'public-routing':    {label:'Public Routing',            icon:'🌐'},
+    'gateway':           {label:'Third-Party Mail Gateway',  icon:'🛡'},
+    'internal-handoff':  {label:'Internal Hand-off',         icon:'🔀'},
+    'cloud-filtering':   {label:'Cloud Mail Filtering',      icon:'☁'},
+    'mailbox-delivery':  {label:'Mailbox Delivery',          icon:'📬'},
+    'internal-routing':  {label:'Internal Routing',          icon:'🏢'},
+    'outcome':           {label:'Delivery Outcome',          icon: deliveryClass.mode==='completed'?'✅':deliveryClass.mode==='bounced'||deliveryClass.mode==='rejected'?'🚨':'⚠️'},
   };
 
-  // Group hops into ordered phases, preserving hop order within each phase
-  const phaseOrder=['external-sending','public-routing','gateway','internal-handoff','cloud-filtering','internal-routing','mailbox-delivery'];
+  const deliveryModeBadgeCls={completed:'b-pass',bounced:'b-fail',rejected:'b-fail',deferred:'b-soft',incomplete:'b-soft'};
+  const deliveryModeLabel={completed:'Delivered',bounced:'Bounced / NDR',rejected:'Rejected',deferred:'Deferred',incomplete:'Incomplete'};
+
   const hopPhases=hopsWithPct.map((hop,i)=>({...hop,phase:assignPhase(hop,i,hopsWithPct)}));
-  // Build ordered list of [phaseName, hops[]] without duplicating phase blocks
   const phaseGroups=[];
   let currentPhase=null;
   for(const hop of hopPhases){
@@ -1340,31 +1344,37 @@ function decodeHeaders(){
   }
 
   html+=`<div class="card">
-  <div class="card-hd"><div class="card-icon ci-blue">🗺</div><div><div class="card-title">Message Journey — ${hops.length} hop${hops.length!==1?'s':''}</div><div class="card-desc">Every system the message passed through, grouped by phase</div></div></div>
-  ${totalDelay!==null?`<div class="info-box" style="margin-bottom:14px;"><span>⏱</span><span>Total delivery time: <b>${delayLabel(totalDelay)}</b></span></div>`:''}
-  <div class="timeline-controls">
-    <button class="btn-ghost" onclick="expandAll()">Expand All</button>
-    <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
-    <span>${hops.length} hop${hops.length!==1?'s':''} across ${phaseGroups.length} phase${phaseGroups.length!==1?'s':''}</span>
+  <div class="card-hd">
+    <div class="card-icon ci-blue">🗺</div>
+    <div style="flex:1;"><div class="card-title">Message Journey — ${hops.length} hop${hops.length!==1?'s':''}</div><div class="card-desc">Every system the message passed through, grouped by phase</div></div>
+    <span class="badge ${deliveryModeBadgeCls[deliveryClass.mode]||'b-none'}" style="font-size:12px;">${deliveryModeLabel[deliveryClass.mode]||deliveryClass.mode}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+    ${storyTiming?`<span style="font-size:13px;color:var(--text-secondary);">⏱ ${storyTiming.text}</span>`:''}
+    <div style="margin-left:auto;display:flex;gap:6px;">
+      <button class="btn-ghost" onclick="expandAll()">Expand All</button>
+      <button class="btn-ghost" onclick="collapseAll()">Collapse All</button>
+    </div>
   </div>
   <div class="hop-wrap" id="hopWrap">`;
 
   let globalHopIdx=0;
   phaseGroups.forEach((group,gi)=>{
-    const meta=PHASE_META[group.phase]||{label:group.phase,icon:'📧',desc:''};
-    // Phase separator — between phases show a more prominent divider
+    const meta=PHASE_META[group.phase]||{label:group.phase,icon:'📧'};
+    const phaseStory=storyByPhase[group.phase]||[];
     if(gi>0){
-      html+=`<div style="display:flex;align-items:center;gap:0;margin:4px 0;">
-        <div style="width:1px;background:var(--border);height:16px;margin:0 auto;display:block;"></div>
+      html+=`<div style="height:16px;display:flex;align-items:center;justify-content:center;">
+        <div style="width:1px;height:100%;background:var(--border);"></div>
       </div>`;
     }
-    // Phase header
+    // Phase header with optional story annotation
     html+=`<div class="phase-header">
       <span class="phase-icon">${meta.icon}</span>
       <span class="phase-label">${esc(meta.label)}</span>
       <div class="phase-line"></div>
       <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${group.hops.length} hop${group.hops.length!==1?'s':''}</span>
-    </div>`;
+    </div>
+    ${phaseStory.map(t=>`<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:2px 0 8px 22px;line-height:1.5;">${t}</div>`).join('')}`;
 
     group.hops.forEach((hop,hi)=>{
       const i=globalHopIdx++;
@@ -1376,6 +1386,7 @@ function decodeHeaders(){
       const hasTLS=hop.tls||/TLS|ESMTPS|STARTTLS/i.test(hop.with||'');
       const noTLS=!hasTLS&&hop.with&&/SMTP/i.test(hop.with);
       const pctBadge=hop.pct!==null&&hop.pct>=5?`<span style="font-size:10px;color:var(--text-muted);font-weight:600;">${hop.pct}%</span>`:'';
+      const hopStory=storyByHop[i]||'';
 
       if(hi>0){
         html+=`<div class="hop-connector"><div class="hop-connector-icon">↓</div></div>`;
@@ -1386,6 +1397,7 @@ function decodeHeaders(){
           <div class="hop-num-badge ${numCls}">${isFirst?'⊙':isLast?'✓':i+1}</div>
           <div class="hop-summary-body">
             <div class="hop-summary-title">${esc(hop.desc)}</div>
+            ${hopStory?`<div style="font-size:11px;color:var(--text-muted);font-style:italic;margin-top:2px;line-height:1.4;">${hopStory}</div>`:''}
             <div class="hop-summary-meta">
               ${hop.date&&!isNaN(hop.date)?`<span>🕐 ${hop.date.toUTCString()}</span>`:''}
               ${hop.from?`<span>From: ${esc(hop.from.length>40?hop.from.substring(0,40)+'…':hop.from)}</span>`:''}
@@ -1426,6 +1438,26 @@ function decodeHeaders(){
       </div>`;
     });
   });
+
+  // Delivery Outcome phase — always last
+  if(storyOutcome.length){
+    const outcomeMeta=PHASE_META['outcome'];
+    const outcomeIsGood=deliveryClass.mode==='completed';
+    const outcomeBorder=outcomeIsGood?'rgba(34,197,94,.25)':deliveryClass.mode==='incomplete'||deliveryClass.mode==='deferred'?'rgba(245,158,11,.3)':'rgba(239,68,68,.3)';
+    const outcomeBg=outcomeIsGood?'var(--green-dim)':deliveryClass.mode==='incomplete'||deliveryClass.mode==='deferred'?'var(--orange-dim)':'var(--red-dim)';
+    const outcomeTextColor=outcomeIsGood?'var(--green)':deliveryClass.mode==='incomplete'||deliveryClass.mode==='deferred'?'var(--orange)':'var(--red)';
+    html+=`<div style="height:16px;display:flex;align-items:center;justify-content:center;">
+      <div style="width:1px;height:100%;background:var(--border);"></div>
+    </div>
+    <div class="phase-header">
+      <span class="phase-icon">${outcomeMeta.icon}</span>
+      <span class="phase-label">${esc(outcomeMeta.label)}</span>
+      <div class="phase-line"></div>
+    </div>
+    <div style="background:${outcomeBg};border:1px solid ${outcomeBorder};border-radius:8px;padding:12px 16px;display:flex;flex-direction:column;gap:6px;">
+      ${storyOutcome.map(s=>`<div style="font-size:13px;color:${outcomeTextColor};font-weight:${s===storyOutcome[0]?'600':'400'};line-height:1.5;">${s.text}</div>`).join('')}
+    </div>`;
+  }
 
   html+=`</div></div>`;
 
