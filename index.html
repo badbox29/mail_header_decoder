@@ -2102,33 +2102,30 @@ function generateReport(){
   const typeLabels={executive:'Executive Summary',full:'Full Detail',security:'Security Analysis',journey:'Mail Journey',custom:'Custom Report'};
   const now=new Date().toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
 
+  // ── UNCONDITIONAL MESSAGE IDENTITY HEADER — always in every report ─────────
   let html=`<div class="rpt-header">
     <h1>Mail Flow Analyzer — ${typeLabels[_selectedReportType]||'Report'}</h1>
-    <div class="rpt-meta">Generated ${now} &nbsp;·&nbsp; Subject: ${esc(d.subject)} &nbsp;·&nbsp; From: ${esc(d.from)}</div>
-  </div>`;
-
-  // ── EXECUTIVE SUMMARY ──────────────────────────────────────────────────────
-  if(sections.exec){
-    html+=`<div class="rpt-section">
-    <div class="rpt-section-title">Executive Summary</div>
-    <div class="rpt-grid">
+    <div class="rpt-meta">Generated ${now} &nbsp;·&nbsp; ${esc(d.from)} → ${esc(d.to)}</div>
+  </div>
+  <div class="rpt-section" style="border:1px solid #d0d0e0;border-radius:8px;padding:12px 14px;margin-bottom:18px;background:#f8f9fc;">
+    <div class="rpt-grid" style="margin-bottom:6px;">
       <div class="rpt-item"><div class="lbl">From (Sender)</div><div class="val">${esc(d.from)}</div></div>
       <div class="rpt-item"><div class="lbl">To (Recipient)</div><div class="val">${esc(d.to)}</div></div>
     </div>
-    <div class="rpt-grid">
+    <div class="rpt-grid" style="margin-bottom:6px;">
       <div class="rpt-item"><div class="lbl">Subject</div><div class="val">${esc(d.subject)}</div></div>
       <div class="rpt-item"><div class="lbl">Date Sent</div><div class="val">${esc(d.dateLocal)}</div></div>
     </div>
-    <div class="rpt-grid rpt-grid-3">
+    <div class="rpt-grid rpt-grid-3" style="margin-bottom:6px;">
       <div class="rpt-item"><div class="lbl">Delivery Time</div><div class="val">${esc(d.totalDelayStr)}</div></div>
       <div class="rpt-item"><div class="lbl">Hops</div><div class="val">${d.hopCount}</div></div>
       <div class="rpt-item"><div class="lbl">Largest Delay</div><div class="val">${esc(d.maxDelayStr)}</div></div>
       <div class="rpt-item"><div class="lbl">Detected Mail Provider</div><div class="val">${esc(d.mailProvider)}${d.isHybrid?' (Hybrid)':''}</div></div>
       <div class="rpt-item"><div class="lbl">Third-Party Gateway</div><div class="val">${d.gwDetected?esc(d.gwName):'None detected'}</div></div>
-      ${d.mailer?`<div class="rpt-item"><div class="lbl">Mail Client</div><div class="val">${esc(d.mailer)}</div></div>`:''}
+      ${d.mailer?`<div class="rpt-item"><div class="lbl">Mail Client</div><div class="val">${esc(d.mailer)}</div></div>`:'<div class="rpt-item"><div class="lbl">Mail Client</div><div class="val" style="color:#9090a8;">Not detected</div></div>'}
     </div>
-    <div class="rpt-item" style="margin-bottom:10px;">
-      <div class="lbl">Authentication (${d.gwDetected?'gateway-verified':'as reported'})</div>
+    <div class="rpt-item">
+      <div class="lbl">Authentication ${d.gwDetected?'(gateway-verified)':'(as reported)'}</div>
       <div class="val" style="margin-top:4px;">
         ${rptAuthBadge('SPF',d.effectiveAuth.spf)}
         ${rptAuthBadge('DKIM',d.effectiveAuth.dkim)}
@@ -2136,6 +2133,12 @@ function generateReport(){
         ${d.effectiveAuth.compauth?rptAuthBadge('CompAuth',d.effectiveAuth.compauth):''}
       </div>
     </div>
+  </div>`;
+
+  // ── EXECUTIVE SUMMARY (finding + investigation point overview) ─────────────
+  if(sections.exec){
+    html+=`<div class="rpt-section">
+    <div class="rpt-section-title">Executive Summary</div>
     <div class="rpt-finding">
       <div class="find-lbl">🔍 Most Likely Finding</div>
       <div class="find-text">${esc(d.findingText)}</div>
