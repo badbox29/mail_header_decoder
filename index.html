@@ -1560,11 +1560,15 @@ function decodeHeaders(){
     {key:'compauth',label:'CompAuth',fullName:'Microsoft Composite Authentication',
      status:{
        pass:{badge:'b-pass',short:'Pass',headline:'Microsoft combined check passed',
-         detail:'Microsoft\'s Exchange Online Protection evaluated SPF, DKIM, DMARC and implicit authentication signals together and determined this message is likely legitimate. This is a Microsoft-specific verdict used when strict individual checks might be inconclusive.'},
+         detail:'Microsoft\'s Exchange Online Protection evaluated SPF, DKIM, DMARC and implicit authentication signals together and determined this message is likely legitimate. This is a Microsoft-specific verdict used when strict individual checks might be inconclusive.'
+         +(auth.compReason?' Reason code: '+auth.compReason+'.':'')},
        fail:{badge:'b-fail',short:'Fail',headline:'Microsoft combined check failed',
-         detail:'Microsoft\'s composite authentication failed. EOP considers this message suspicious based on a combination of SPF, DKIM, DMARC, and behavioral signals. The reason code '+(auth.compReason||'(not found)')+' provides further detail — reason 000 means explicit failure, 001 means implicit failure.'},
-       none:{badge:'b-none',short:'N/A',headline:'Not evaluated',
-         detail:'No Microsoft composite authentication header was found. This is normal for non-Microsoft mail environments.'},
+         detail:'Microsoft\'s composite authentication failed. EOP considers this message suspicious based on a combination of SPF, DKIM, DMARC, and behavioral signals.'
+         +(auth.compReason?' Reason code '+auth.compReason+' — '+(auth.compReason==='000'?'explicit failure (message failed all checks).':auth.compReason==='001'?'implicit failure (message failed implicit checks).':'see Microsoft documentation for this reason code.'):'')},
+       none:{badge:'b-none',short:'N/A',headline:(auth.compReason==='405'?'Not evaluated — on-premises delivery':'Not evaluated'),
+         detail:(auth.compReason==='405'
+           ?'Reason code 405 indicates EOP did not perform composite authentication because this message was destined for an on-premises mailbox via hybrid routing. This is expected and normal behavior — composite auth only fully applies to cloud-hosted mailboxes. It is not a failure.'
+           :'No Microsoft composite authentication header was found. This is normal for non-Microsoft mail environments.')},
      }
     },
   ];
@@ -1917,7 +1921,7 @@ function decodeHeaders(){
     if(ms.scl!==null)html+=`<div class="ms-item"><div class="ms-val" style="color:${ms.scl>=5?'var(--red)':ms.scl>=1?'var(--orange)':'var(--green)'}">${ms.scl}</div><div class="ms-lbl">Spam Confidence Level (SCL)</div><div class="ms-explain">${esc(sclExplain(ms.scl))}</div></div>`;
     if(ms.bcl!==null)html+=`<div class="ms-item"><div class="ms-val" style="color:${ms.bcl>=7?'var(--red)':ms.bcl>=4?'var(--orange)':'var(--green)'}">${ms.bcl}</div><div class="ms-lbl">Bulk Complaint Level (BCL)</div><div class="ms-explain">${esc(bclExplain(ms.bcl))}</div></div>`;
     if(ms.pcl!==null)html+=`<div class="ms-item"><div class="ms-val">${ms.pcl}</div><div class="ms-lbl">Phishing Confidence Level (PCL)</div><div class="ms-explain">${ms.pcl>=3?'Phishing indicators detected':'No phishing indicators'}</div></div>`;
-    if(auth.compauth)html+=`<div class="ms-item"><div class="ms-val" style="color:${auth.compauth==='pass'?'var(--green)':'var(--red)'}">${auth.compauth}</div><div class="ms-lbl">Composite Auth</div><div class="ms-explain">${auth.compReason?'Reason code: '+auth.compReason:''}</div></div>`;
+    if(auth.compauth){const is405=auth.compReason==='405';const caColor=is405?'var(--text-muted)':auth.compauth==='pass'?'var(--green)':'var(--red)';const caLabel=is405?'Not evaluated':auth.compauth;const caExplain=is405?'Reason 405 — EOP skipped composite auth because this message was routed to an on-premises mailbox via hybrid routing. This is expected and normal.':auth.compReason?'Reason code: '+auth.compReason:'';html+=`<div class="ms-item"><div class="ms-val" style="color:${caColor};font-size:${is405?'13px':'24px'};font-weight:700;padding-top:${is405?'4px':'0'}">${esc(caLabel)}</div><div class="ms-lbl">Composite Auth</div><div class="ms-explain">${esc(caExplain)}</div></div>`;}
     if(ms.netId)html+=`<div class="ms-item" style="grid-column:1/-1"><div class="ms-lbl">Network Message ID</div><div class="ms-explain mono">${esc(ms.netId)}</div></div>`;
     html+=`</div>`;
     if(ms.ffas){
