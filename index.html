@@ -436,9 +436,9 @@ textarea::placeholder{color:var(--text-muted);}
           <div class="s-hint">Comma-separated hostnames or FQDNs. These will be recognized as internal Exchange servers in the hop timeline.</div>
         </div>
         <div class="s-row" style="margin-bottom:0;">
-          <label class="s-label">Hybrid Connector FQDN <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-          <input class="s-input" id="s-hybrid-connector" placeholder="hybrid.yourdomain.com" />
-          <div class="s-hint">The outbound hybrid connector FQDN if known. Helps identify hybrid routing hops.</div>
+          <label class="s-label">Hybrid Connector FQDNs <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <input class="s-input" id="s-hybrid-connector" placeholder="hybrid1.yourdomain.com, hybrid2.yourdomain.com" />
+          <div class="s-hint">Comma-separated FQDNs of your hybrid connectors. Helps identify hybrid routing hops in the timeline.</div>
         </div>
       </div>
       <!-- On-prem Exchange extra fields -->
