@@ -216,7 +216,29 @@ textarea::placeholder{color:var(--text-muted);}
 .phase-line{flex:1;height:1px;background:var(--border);}
 .phase-icon{font-size:13px;}
 
-/* ── REPORT MODAL ─────────────────────────────────────────────────────────── */
+/* ── SETTINGS MODAL ───────────────────────────────────────────────────────── */
+.settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;}
+.settings-overlay.open{display:flex;}
+.settings-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;width:560px;max-width:95vw;max-height:88vh;overflow-y:auto;padding:24px;}
+.settings-modal h2{font-size:16px;font-weight:600;margin-bottom:4px;}
+.settings-modal .s-desc{font-size:13px;color:var(--text-secondary);margin-bottom:20px;line-height:1.5;}
+.s-group{margin-bottom:20px;}
+.s-group-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;}
+.s-row{margin-bottom:12px;}
+.s-label{font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:5px;display:block;}
+.s-hint{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.4;}
+.s-select{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 12px;outline:none;transition:border-color .15s;appearance:none;cursor:pointer;}
+.s-select:focus{border-color:var(--blue);}
+.s-input{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 12px;outline:none;transition:border-color .15s;}
+.s-input:focus{border-color:var(--blue);}
+.s-input::placeholder{color:var(--text-muted);}
+.s-conditional{display:none;padding:12px 14px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border);margin-top:8px;}
+.s-conditional.visible{display:block;}
+.settings-modal-footer{display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid var(--border);margin-top:4px;}
+.s-active-badge{display:inline-flex;align-items:center;gap:4px;background:var(--blue-dim);color:var(--blue);border:1px solid rgba(59,130,246,.25);border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:6px;vertical-align:middle;}
+/* ── TOAST ────────────────────────────────────────────────────────────────── */
+.toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg-card);border:1px solid var(--green);color:var(--green);border-radius:8px;padding:8px 18px;font-size:13px;font-weight:500;z-index:600;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .report-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;}
 .report-overlay.open{display:flex;}
 .report-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;width:520px;max-width:95vw;max-height:85vh;overflow-y:auto;padding:24px;}
@@ -377,7 +399,136 @@ textarea::placeholder{color:var(--text-muted);}
   <div class="topbar-title"><span>✉</span> Mail Flow Analyzer</div>
   <div class="topbar-actions">
     <button class="btn-ghost" id="printBtn" onclick="openReportModal()" style="display:none;">🖨 Print Report</button>
+    <button class="btn-ghost" onclick="openSettingsModal()" id="settingsBtn" title="Environment Settings">⚙ Settings</button>
     <button class="btn-ghost" onclick="toggleTheme()" id="themeBtn">☀ Light</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SETTINGS MODAL -->
+<div class="settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="settings-modal">
+    <h2>⚙ Environment Settings</h2>
+    <p class="s-desc">Configure your mail environment so the tool can recognize internal systems and provide more accurate analysis. All fields are optional and stored locally in your browser.</p>
+
+    <!-- MAIL SYSTEM -->
+    <div class="s-group">
+      <div class="s-group-title">Mail System</div>
+      <div class="s-row">
+        <label class="s-label">Underlying Mail Platform</label>
+        <select class="s-select" id="s-mail-system" onchange="onMailSystemChange()">
+          <option value="">— Not specified —</option>
+          <option value="m365">Microsoft 365 / Exchange Online</option>
+          <option value="hybrid">Exchange Online Hybrid</option>
+          <option value="google">Google Workspace</option>
+          <option value="onprem-exchange">On-Premises Exchange</option>
+          <option value="onprem-other">Other On-Premises MTA</option>
+        </select>
+      </div>
+      <!-- M365 / Exchange Online — no extra fields needed -->
+      <!-- Hybrid extra fields -->
+      <div class="s-conditional" id="s-cond-hybrid">
+        <div class="s-row">
+          <label class="s-label">On-Premises Exchange Server Hostnames</label>
+          <input class="s-input" id="s-hybrid-hosts" placeholder="mail.corp.local, exch01.internal, mbx02.domain.com" />
+          <div class="s-hint">Comma-separated hostnames or FQDNs. These will be recognized as internal Exchange servers in the hop timeline.</div>
+        </div>
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">Hybrid Connector FQDN <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <input class="s-input" id="s-hybrid-connector" placeholder="hybrid.yourdomain.com" />
+          <div class="s-hint">The outbound hybrid connector FQDN if known. Helps identify hybrid routing hops.</div>
+        </div>
+      </div>
+      <!-- On-prem Exchange extra fields -->
+      <div class="s-conditional" id="s-cond-onprem-exchange">
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">Exchange Server Hostnames</label>
+          <input class="s-input" id="s-onprem-exchange-hosts" placeholder="mail.corp.local, exch01.internal" />
+          <div class="s-hint">Comma-separated hostnames or FQDNs of your Exchange servers.</div>
+        </div>
+      </div>
+      <!-- Other on-prem MTA extra fields -->
+      <div class="s-conditional" id="s-cond-onprem-other">
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">MTA Server Hostnames</label>
+          <input class="s-input" id="s-onprem-other-hosts" placeholder="mail.yourdomain.com, smtp-relay.internal" />
+          <div class="s-hint">Comma-separated hostnames. These will be recognized as internal mail servers in the hop timeline.</div>
+        </div>
+      </div>
+      <!-- Google Workspace extra fields -->
+      <div class="s-conditional" id="s-cond-google">
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">Primary Domain <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <input class="s-input" id="s-google-domain" placeholder="yourdomain.com" />
+          <div class="s-hint">Your Google Workspace primary domain. Helps confirm inbound delivery hops.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INBOUND FILTER -->
+    <div class="s-group">
+      <div class="s-group-title">Inbound Mail Filter / Gateway</div>
+      <div class="s-row">
+        <label class="s-label">Inbound Filtering Platform</label>
+        <select class="s-select" id="s-inbound-filter" onchange="onFilterChange('inbound')">
+          <option value="">— None / Not specified —</option>
+          <option value="proofpoint">Proofpoint</option>
+          <option value="mimecast">Mimecast</option>
+          <option value="barracuda">Barracuda</option>
+          <option value="cisco-esa">Cisco ESA / IronPort</option>
+          <option value="abnormal">Abnormal Security</option>
+          <option value="sophos">Sophos Email</option>
+          <option value="trendmicro">Trend Micro</option>
+          <option value="symantec">Symantec / MessageLabs</option>
+          <option value="forcepoint">Forcepoint</option>
+          <option value="agari">Agari</option>
+        </select>
+      </div>
+      <div class="s-conditional" id="s-cond-inbound-host">
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">Custom Hostname / Domain <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <input class="s-input" id="s-inbound-host" placeholder="filter.yourdomain.com" />
+          <div class="s-hint">If your gateway uses a non-standard hostname, enter it here. The tool will recognize it as your inbound filter in the hop timeline.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTBOUND FILTER -->
+    <div class="s-group">
+      <div class="s-group-title">Outbound Mail Filter / Gateway</div>
+      <div class="s-row">
+        <label class="s-label">Outbound Filtering Platform</label>
+        <select class="s-select" id="s-outbound-filter" onchange="onFilterChange('outbound')">
+          <option value="">— None / Not specified —</option>
+          <option value="proofpoint">Proofpoint</option>
+          <option value="mimecast">Mimecast</option>
+          <option value="barracuda">Barracuda</option>
+          <option value="cisco-esa">Cisco ESA / IronPort</option>
+          <option value="abnormal">Abnormal Security</option>
+          <option value="sophos">Sophos Email</option>
+          <option value="trendmicro">Trend Micro</option>
+          <option value="symantec">Symantec / MessageLabs</option>
+          <option value="forcepoint">Forcepoint</option>
+          <option value="agari">Agari</option>
+        </select>
+        <div class="s-hint" style="margin-top:6px;">Outbound filter settings help identify your gateway in NDR / bounce-back message headers.</div>
+      </div>
+      <div class="s-conditional" id="s-cond-outbound-host">
+        <div class="s-row" style="margin-bottom:0;">
+          <label class="s-label">Custom Hostname / Domain <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <input class="s-input" id="s-outbound-host" placeholder="outbound.yourdomain.com" />
+          <div class="s-hint">Non-standard outbound gateway hostname, if applicable.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-modal-footer">
+      <button class="btn-secondary" onclick="clearSettings()">Clear All</button>
+      <button class="btn-secondary" onclick="closeSettingsModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+    </div>
   </div>
 </div>
 
@@ -844,7 +995,7 @@ function generateFinding(hops,auth,authOrig,ms,totalDelay){
   const hasGateway=hops.some(h=>h.sys&&(h.sys.name.includes('Proofpoint')||h.sys.name.includes('Mimecast')||h.sys.name.includes('Barracuda')||h.sys.name.includes('Cisco')));
 
   if(maxDelay>600000){
-    const sys=maxHop?classifySystem(maxHop.by):null;
+    const sys=maxHop?classifySystemWithSettings(maxHop.by):null;
     findings.push(`The message experienced a significant delay of ${delayLabel(maxDelay)}${sys?' at '+sys.name:''}, possibly due to queue congestion, greylisting, or rate limiting.`);
     conf='High';
   }
@@ -1213,7 +1364,7 @@ function decodeHeaders(){
   const rawHops=receivedVals.map(v=>parseReceived(v)).reverse();
   const hops=rawHops.map((h,i)=>{
     const delay=(i>0&&h.date&&rawHops[i-1].date)?(h.date-rawHops[i-1].date):null;
-    const sys=classifySystem(h.by,h.with)||classifySystem(h.fromHost,h.with);
+    const sys=classifySystemWithSettings(h.by,h.with)||classifySystemWithSettings(h.fromHost,h.with);
     const desc=hopDescription(h,i,rawHops.length,sys);
     return{...h,delay,sys,desc,index:i};
   });
@@ -2297,6 +2448,141 @@ function rptAuthBadge(label,val){
   const cls=c==='pass'?'pass':c==='fail'?'fail':c==='soft'?'soft':'none';
   return`<span class="rpt-badge ${cls}">${authIcon(val)} ${label}: ${esc(val)}</span> `;
 }
+
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+const SETTINGS_KEY='mfa_settings_v1';
+
+function loadSettings(){
+  try{return JSON.parse(localStorage.getItem(SETTINGS_KEY))||{};}
+  catch(e){return{};}
+}
+
+function saveSettings(){
+  const s={
+    mailSystem:document.getElementById('s-mail-system').value,
+    hybridHosts:document.getElementById('s-hybrid-hosts').value.trim(),
+    hybridConnector:document.getElementById('s-hybrid-connector').value.trim(),
+    onpremExchangeHosts:document.getElementById('s-onprem-exchange-hosts').value.trim(),
+    onpremOtherHosts:document.getElementById('s-onprem-other-hosts').value.trim(),
+    googleDomain:document.getElementById('s-google-domain').value.trim(),
+    inboundFilter:document.getElementById('s-inbound-filter').value,
+    inboundHost:document.getElementById('s-inbound-host').value.trim(),
+    outboundFilter:document.getElementById('s-outbound-filter').value,
+    outboundHost:document.getElementById('s-outbound-host').value.trim(),
+  };
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(s));
+  applySettings(s);
+  closeSettingsModal();
+  showToast('✓ Settings saved');
+  updateSettingsBadge(s);
+}
+
+function clearSettings(){
+  localStorage.removeItem(SETTINGS_KEY);
+  applySettings({});
+  populateSettingsForm({});
+  updateSettingsBadge({});
+  showToast('Settings cleared');
+}
+
+function applySettings(s){window._mfaSettings=s||{};}
+
+function populateSettingsForm(s){
+  document.getElementById('s-mail-system').value=s.mailSystem||'';
+  document.getElementById('s-hybrid-hosts').value=s.hybridHosts||'';
+  document.getElementById('s-hybrid-connector').value=s.hybridConnector||'';
+  document.getElementById('s-onprem-exchange-hosts').value=s.onpremExchangeHosts||'';
+  document.getElementById('s-onprem-other-hosts').value=s.onpremOtherHosts||'';
+  document.getElementById('s-google-domain').value=s.googleDomain||'';
+  document.getElementById('s-inbound-filter').value=s.inboundFilter||'';
+  document.getElementById('s-inbound-host').value=s.inboundHost||'';
+  document.getElementById('s-outbound-filter').value=s.outboundFilter||'';
+  document.getElementById('s-outbound-host').value=s.outboundHost||'';
+  onMailSystemChange();
+  onFilterChange('inbound');
+  onFilterChange('outbound');
+}
+
+function updateSettingsBadge(s){
+  const btn=document.getElementById('settingsBtn');
+  const hasSettings=s&&(s.mailSystem||s.inboundFilter||s.outboundFilter);
+  btn.innerHTML=hasSettings?'⚙ Settings <span class="s-active-badge">●</span>':'⚙ Settings';
+}
+
+function openSettingsModal(){
+  populateSettingsForm(loadSettings());
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+
+function closeSettingsModal(){
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+
+function onMailSystemChange(){
+  const v=document.getElementById('s-mail-system').value;
+  document.getElementById('s-cond-hybrid').classList.toggle('visible',v==='hybrid');
+  document.getElementById('s-cond-onprem-exchange').classList.toggle('visible',v==='onprem-exchange');
+  document.getElementById('s-cond-onprem-other').classList.toggle('visible',v==='onprem-other');
+  document.getElementById('s-cond-google').classList.toggle('visible',v==='google');
+}
+
+function onFilterChange(dir){
+  const v=document.getElementById('s-'+dir+'-filter').value;
+  document.getElementById('s-cond-'+dir+'-host').classList.toggle('visible',!!v);
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ── SETTINGS-AWARE SYSTEM CLASSIFICATION ─────────────────────────────────────
+function classifySystemWithSettings(host,proto){
+  const base=classifySystem(host,proto);
+  if(!host)return base;
+  const s=window._mfaSettings||{};
+
+  function matchesHosts(hostsStr){
+    if(!hostsStr)return false;
+    return hostsStr.split(',').map(h=>h.trim().toLowerCase()).filter(Boolean)
+      .some(h=>host.toLowerCase()===h||host.toLowerCase().endsWith('.'+h)||host.toLowerCase().includes(h));
+  }
+
+  // Internal / on-prem hostnames
+  const checks=[
+    {condition:s.mailSystem==='hybrid',     str:s.hybridHosts,     name:'On-Premises Exchange',    icon:'🏢',type:'cloud'},
+    {condition:s.mailSystem==='hybrid',     str:s.hybridConnector, name:'Hybrid Connector',         icon:'🔀',type:'cloud'},
+    {condition:s.mailSystem==='onprem-exchange', str:s.onpremExchangeHosts, name:'On-Premises Exchange', icon:'🏢',type:'cloud'},
+    {condition:s.mailSystem==='onprem-other',    str:s.onpremOtherHosts,   name:'On-Premises Mail Server',icon:'🏢',type:'cloud'},
+  ];
+  for(const c of checks){
+    if(c.condition&&matchesHosts(c.str)){
+      return{name:c.name,icon:c.icon,color:'cyan',type:c.type,authHeaders:[],indicators:[]};
+    }
+  }
+
+  // Inbound gateway custom hostname
+  const filterNames={
+    proofpoint:'Proofpoint Gateway',mimecast:'Mimecast Gateway',
+    barracuda:'Barracuda Gateway','cisco-esa':'Cisco ESA',
+    abnormal:'Abnormal Security',sophos:'Sophos Email',
+    trendmicro:'Trend Micro',symantec:'Symantec / MessageLabs',
+    forcepoint:'Forcepoint',agari:'Agari',
+  };
+  if(s.inboundFilter&&s.inboundHost&&matchesHosts(s.inboundHost)){
+    return{name:filterNames[s.inboundFilter]||'Inbound Mail Filter',icon:'🛡',color:'purple',type:'gateway',authHeaders:['authentication-results-original','authentication-results'],indicators:[]};
+  }
+  if(s.outboundFilter&&s.outboundHost&&matchesHosts(s.outboundHost)){
+    return{name:(filterNames[s.outboundFilter]||'Outbound Mail Filter')+' (Outbound)',icon:'🛡',color:'purple',type:'gateway',authHeaders:['authentication-results'],indicators:[]};
+  }
+
+  return base;
+}
+
+// Init settings on page load
+(function(){const s=loadSettings();applySettings(s);updateSettingsBadge(s);})();
 </script>
 <a href="https://github.com/badbox29/mail_flow_analyzer" target="_blank" rel="noopener" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:4px 12px;z-index:50;letter-spacing:.3px;text-decoration:none;transition:color .15s,border-color .15s;" onmouseover="this.style.color='var(--blue)';this.style.borderColor='var(--blue)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">Mail Flow Analyzer v1.5</a>
 </body>
